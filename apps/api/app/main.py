@@ -23,7 +23,7 @@ from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
 
 DB_PATH = Path(__file__).resolve().parents[1] / "ipl_analytics.db"
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://ipl.thetwok.in")
 
 
 @asynccontextmanager
@@ -62,9 +62,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         FRONTEND_URL,
+        "https://ipl.thetwok.in",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://localhost:5173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
