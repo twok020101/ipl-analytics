@@ -1,7 +1,6 @@
 "use client";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://ipl-api.thetwok.in/api/v1";
+import { BASE_URL } from "@/lib/api";
 
 interface User {
   id: number;
@@ -33,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored) {
       setToken(stored);
       // Verify token
-      fetch(`${API_BASE}/auth/me`, {
+      fetch(`${BASE_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${stored}` },
       })
         .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -49,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await fetch(`${API_BASE}/auth/login`, {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
@@ -65,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (email: string, password: string, name: string, organization?: string) => {
-    const res = await fetch(`${API_BASE}/auth/register`, {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, name, organization }),

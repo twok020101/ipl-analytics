@@ -2415,9 +2415,9 @@
       "team2_name": "Lucknow Super Giants",
       "team1_img": "https://g.cricapi.com/iapi/148-637874596301457910.png?w=48",
       "team2_img": "https://g.cricapi.com/iapi/215-637876059669009476.png?w=48",
-      "status": "Match starts at Apr 01, 14:00 GMT",
-      "matchStarted": false,
-      "matchEnded": false
+      "status": "Delhi Capitals won by 6 wkts",
+      "matchStarted": true,
+      "matchEnded": true
     },
     {
       "id": "fd010e39-2255-4460-b0e0-962a26b67b70",

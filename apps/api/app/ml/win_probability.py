@@ -7,7 +7,8 @@ import numpy as np
 import joblib
 from typing import List
 
-MODEL_DIR = Path(__file__).resolve().parents[2] / "trained_models"
+from app.config import MODEL_DIR
+
 MODEL_PATH = MODEL_DIR / "win_probability_model.joblib"
 
 # Feature names for interpretability

@@ -17,7 +17,11 @@ import type {
   PaginatedResponse,
 } from "./types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://ipl-api.thetwok.in/api/v1";
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
+  typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000/api/v1"
+    : "https://ipl-api.thetwok.in/api/v1"
+);
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("ipl_token") : null;
@@ -139,6 +143,11 @@ export const fetchDashboardStats = () => fetchAPI<DashboardStats>("/dashboard/st
 // Comprehensive Match Analysis
 export const fetchMatchAnalysis = (data: { team1: string; team2: string; venue_id: number }) =>
   fetchAPI<Record<string, unknown>>("/analysis/match", { method: "POST", body: JSON.stringify(data) });
+
+// Live Match Tracking
+export const fetchLiveScores = () => fetchAPI<Record<string, unknown>>("/live/scores");
+export const fetchLiveMatch = (id: string) => fetchAPI<Record<string, unknown>>(`/live/match/${id}`);
+export const fetchLiveGamePlan = (id: string) => fetchAPI<Record<string, unknown>>(`/live/match/${id}/gameplan`);
 
 // External — IPL 2026
 import type { Fixture, Squad } from "./types";

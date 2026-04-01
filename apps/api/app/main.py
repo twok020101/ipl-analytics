@@ -1,6 +1,8 @@
 """FastAPI application entry point."""
 
 import os
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.external import router as external_router
 from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
+from app.api.live import router as live_router
 
 DB_PATH = Path(__file__).resolve().parents[1] / "ipl_analytics.db"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://ipl.thetwok.in")
@@ -47,9 +50,57 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(engine)
         print(f"Database loaded from {DB_PATH}")
 
+    # Start background match sync task (every 5 minutes)
+    sync_task = asyncio.create_task(_match_sync_loop())
+
     yield
 
     # Shutdown
+    sync_task.cancel()
+
+
+async def _match_sync_loop():
+    """Background loop: sync match results daily at 2:00 AM IST."""
+    from datetime import datetime, timezone, timedelta
+
+    IST = timezone(timedelta(hours=5, minutes=30))
+    logger = logging.getLogger("match_sync_loop")
+    logger.info("Daily match sync scheduled for 2:00 AM IST")
+
+    while True:
+        try:
+            # Calculate seconds until next 2:00 AM IST
+            now = datetime.now(IST)
+            target = now.replace(hour=2, minute=0, second=0, microsecond=0)
+            if now >= target:
+                target += timedelta(days=1)
+            wait = (target - now).total_seconds()
+            logger.info(f"Next sync in {wait/3600:.1f} hours (at {target.strftime('%Y-%m-%d %H:%M IST')})")
+            await asyncio.sleep(wait)
+
+            # Only sync if CRICAPI key is available
+            if not settings.CRICAPI_KEY:
+                continue
+
+            from app.services.match_sync import sync_results
+            from app.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                result = await sync_results(db)
+                if result.get("db_updated"):
+                    logger.info(f"Auto-sync: {result['db_updated']}")
+            except Exception as e:
+                logger.warning(f"Auto-sync error: {e}")
+            finally:
+                db.close()
+
+        except asyncio.CancelledError:
+            logger.info("Match sync loop stopped")
+            break
+        except Exception as e:
+            logger.warning(f"Sync loop error: {e}")
+            await asyncio.sleep(60)
     print("Shutting down.")
 
 
@@ -87,6 +138,7 @@ app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(external_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(live_router, prefix="/api/v1")
 
 
 @app.get("/health")

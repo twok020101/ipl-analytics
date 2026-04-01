@@ -8,6 +8,7 @@ import {
   fetchVenues,
   fetchUpcomingFixtures,
   fetchMatchAnalysis,
+  BASE_URL,
 } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,10 +47,8 @@ import type { Fixture } from "@/lib/types";
 
 /* ──────────────────────────── Types ──────────────────────────── */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://ipl-api.thetwok.in/api/v1";
-
 async function fetchStrategy(endpoint: string, body: Record<string, unknown>) {
-  const res = await fetch(`${API_BASE}/strategy/${endpoint}`, {
+  const res = await fetch(`${BASE_URL}/strategy/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
