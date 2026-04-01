@@ -1,6 +1,8 @@
 """FastAPI application entry point."""
 
 import os
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -48,9 +50,47 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(engine)
         print(f"Database loaded from {DB_PATH}")
 
+    # Start background match sync task (every 5 minutes)
+    sync_task = asyncio.create_task(_match_sync_loop())
+
     yield
 
     # Shutdown
+    sync_task.cancel()
+
+
+async def _match_sync_loop():
+    """Background loop: sync match results every 5 minutes during match hours."""
+    logger = logging.getLogger("match_sync_loop")
+    logger.info("Match sync loop started")
+
+    while True:
+        try:
+            await asyncio.sleep(300)  # 5 minutes
+
+            # Only sync if CRICAPI key is available
+            if not settings.CRICAPI_KEY:
+                continue
+
+            from app.services.match_sync import sync_results
+            from app.database import SessionLocal
+
+            db = SessionLocal()
+            try:
+                result = await sync_results(db)
+                if result.get("db_updated"):
+                    logger.info(f"Auto-sync: {result['db_updated']}")
+            except Exception as e:
+                logger.warning(f"Auto-sync error: {e}")
+            finally:
+                db.close()
+
+        except asyncio.CancelledError:
+            logger.info("Match sync loop stopped")
+            break
+        except Exception as e:
+            logger.warning(f"Sync loop error: {e}")
+            await asyncio.sleep(60)
     print("Shutting down.")
 
 
