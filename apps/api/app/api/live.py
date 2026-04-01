@@ -25,6 +25,7 @@ from app.services.live_tracker import (
 )
 from app.services.weather import fetch_weather
 from app.services.game_plan_live import recalculate_game_plan
+from app.services.match_sync import sync_results
 from app.config import settings
 
 router = APIRouter(prefix="/live", tags=["live"])
@@ -35,13 +36,19 @@ if settings.CRICAPI_KEY:
 
 
 @router.get("/scores")
-async def get_live_scores():
+async def get_live_scores(db: Session = Depends(get_db)):
     """Get all live IPL match scores with ML win predictions.
 
     Uses cricScore endpoint (1 API call for ALL matches).
     Each live match includes real-time win probability from XGBoost model.
+    Also auto-syncs completed match results to DB.
     """
     matches = await fetch_live_scores()
+
+    # Background sync: update any newly completed matches
+    has_results = any(m["match_state"] == "result" for m in matches)
+    if has_results:
+        await sync_results(db)
     live_states = []
     upcoming = []
     results = []
@@ -167,15 +174,31 @@ async def predict_win_prob(req: WinProbRequest):
 
 
 @router.post("/poll")
-async def trigger_poll():
-    """Manually trigger a score poll and update.
+async def trigger_poll(db: Session = Depends(get_db)):
+    """Manually trigger a score poll, sync results, and update.
 
     In production, this is called by a cron job every 5 minutes
     during match hours (13:30-23:30 IST).
     """
+    # First sync any completed match results to DB + cache
+    sync = await sync_results(db)
+
+    # Then poll live matches
     states = await poll_and_update()
     return {
         "polled_at": datetime.now(timezone.utc).isoformat(),
         "live_matches": len(states),
         "states": states,
+        "sync": sync,
     }
+
+
+@router.post("/sync")
+async def sync_match_results(db: Session = Depends(get_db)):
+    """Sync completed match results from CricAPI to database and fixture cache.
+
+    Updates: match winners, scores, overs, toss data, fixture status.
+    Call this after a match ends to update standings and fixtures.
+    """
+    result = await sync_results(db)
+    return result
