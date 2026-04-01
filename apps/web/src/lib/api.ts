@@ -1,0 +1,143 @@
+import type {
+  Team,
+  Player,
+  Venue,
+  VenueStats,
+  H2HTeamResult,
+  H2HPlayerResult,
+  MatchPrediction,
+  StrategyResponse,
+  SeasonStanding,
+  Season,
+  PlayerBattingStats,
+  PlayerBowlingStats,
+  PlayerForm,
+  AIResponse,
+  DashboardStats,
+  PaginatedResponse,
+} from "./types";
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+
+async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) {
+    throw new Error(`API Error: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
+// Teams
+export const fetchTeams = () => fetchAPI<Team[]>("/teams");
+export const fetchTeam = (slug: string) => fetchAPI<Team>(`/teams/${slug}`);
+export const fetchTeamPlayers = (slug: string) => fetchAPI<Player[]>(`/teams/${slug}/players`);
+
+// Players
+export const fetchPlayers = (params?: {
+  search?: string;
+  role?: string;
+  page?: number;
+  per_page?: number;
+}) => {
+  const searchParams = new URLSearchParams();
+  if (params?.search) searchParams.set("search", params.search);
+  if (params?.role && params.role !== "All") searchParams.set("role", params.role);
+  if (params?.page) searchParams.set("page", String(params.page));
+  if (params?.per_page) searchParams.set("per_page", String(params.per_page));
+  const qs = searchParams.toString();
+  return fetchAPI<PaginatedResponse<Player>>(`/players${qs ? `?${qs}` : ""}`);
+};
+export const fetchPlayer = (id: number) => fetchAPI<Player>(`/players/${id}`);
+export const fetchPlayerBatting = (id: number) =>
+  fetchAPI<PlayerBattingStats[]>(`/players/${id}/batting`);
+export const fetchPlayerBowling = (id: number) =>
+  fetchAPI<PlayerBowlingStats[]>(`/players/${id}/bowling`);
+export const fetchPlayerForm = (id: number) => fetchAPI<PlayerForm>(`/players/${id}/form`);
+
+// Venues
+export const fetchVenues = () => fetchAPI<Venue[]>("/venues");
+export const fetchVenue = (id: number) => fetchAPI<Venue & VenueStats>(`/venues/${id}`);
+
+// Head to Head
+export const fetchH2HTeams = (team1: string, team2: string) =>
+  fetchAPI<H2HTeamResult>(`/h2h/teams?team1=${encodeURIComponent(team1)}&team2=${encodeURIComponent(team2)}`);
+export const fetchH2HPlayers = (batter: string, bowler: string) =>
+  fetchAPI<H2HPlayerResult>(
+    `/h2h/players?batter=${encodeURIComponent(batter)}&bowler=${encodeURIComponent(bowler)}`
+  );
+
+// Predictions
+export const predictMatch = (data: {
+  team1_id: number;
+  team2_id: number;
+  venue_id?: number;
+  toss_winner_id?: number;
+  toss_decision?: string;
+}) => fetchAPI<MatchPrediction>("/predict/match", { method: "POST", body: JSON.stringify(data) });
+
+export const predictPlayer = (data: { player_id: number; venue_id?: number; opposition_id?: number }) =>
+  fetchAPI<{ player: { id: number; name: string }; projection: Record<string, unknown>; features: Record<string, unknown> }>(
+    "/predict/player",
+    { method: "POST", body: JSON.stringify(data) }
+  );
+
+// Strategy
+export const getStrategy = (data: {
+  squad_player_ids: number[];
+  opposition_bowler_ids?: number[];
+  venue_id?: number;
+  include_ai_explanation?: boolean;
+}) =>
+  fetchAPI<StrategyResponse>("/strategy/batting-order", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const getBowlingPlan = (data: {
+  squad_bowler_ids: number[];
+  opposition_batter_ids?: number[];
+  venue_id?: number;
+  include_ai_explanation?: boolean;
+}) =>
+  fetchAPI<StrategyResponse>("/strategy/bowling-plan", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+// AI
+export const fetchAIMatchPreview = (data: {
+  team1_id: number;
+  team2_id: number;
+  venue_id?: number;
+}) =>
+  fetchAPI<AIResponse>("/ai/match-preview", { method: "POST", body: JSON.stringify(data) });
+
+export const fetchAIPlayerReport = (data: { player_id: number }) =>
+  fetchAPI<AIResponse>("/ai/player-report", { method: "POST", body: JSON.stringify(data) });
+
+export const fetchAIChat = (question: string) =>
+  fetchAPI<AIResponse>("/ai/chat", { method: "POST", body: JSON.stringify({ question }) });
+
+// Seasons
+export const fetchSeasons = () => fetchAPI<Season[]>("/seasons");
+export const fetchSeasonStandings = (season: string) =>
+  fetchAPI<{ season: string; standings: SeasonStanding[] }>(`/seasons/${season}/standings`);
+
+// Dashboard
+export const fetchDashboardStats = () => fetchAPI<DashboardStats>("/dashboard/stats");
+
+// Comprehensive Match Analysis
+export const fetchMatchAnalysis = (data: { team1: string; team2: string; venue_id: number }) =>
+  fetchAPI<Record<string, unknown>>("/analysis/match", { method: "POST", body: JSON.stringify(data) });
+
+// External — IPL 2026
+import type { Fixture, Squad } from "./types";
+
+export const fetchFixtures = () => fetchAPI<Fixture[]>("/external/fixtures");
+export const fetchUpcomingFixtures = (limit = 5) =>
+  fetchAPI<Fixture[]>(`/external/fixtures/upcoming?limit=${limit}`);
+export const fetchSquads = () => fetchAPI<Record<string, Squad>>("/external/squads");
+export const fetchSquad = (team: string) => fetchAPI<Squad>(`/external/squads/${team}`);
