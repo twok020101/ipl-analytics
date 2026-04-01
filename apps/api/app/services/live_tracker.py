@@ -61,15 +61,59 @@ def init_tracker(api_key: str):
     logger.info("Live tracker initialized")
 
 
+def _is_match_window() -> bool:
+    """Check if any IPL match could be live right now.
+
+    IPL matches start at 15:30 IST (10:00 UTC) or 19:30 IST (14:00 UTC)
+    and last ~4 hours. Only poll CricAPI during these windows.
+    """
+    import json
+    try:
+        cache_path = DATA_DIR / "ipl2026.json"
+        if not cache_path.exists():
+            return True  # can't check, assume yes
+
+        with open(cache_path) as f:
+            data = json.load(f)
+
+        now = datetime.now(timezone.utc)
+        for fix in data.get("fixtures", []):
+            if fix.get("matchEnded"):
+                continue
+            match_time = fix.get("dateTimeGMT", "")
+            if not match_time:
+                continue
+            try:
+                start = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
+                if not start.tzinfo:
+                    start = start.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                continue
+
+            # Window: 30 min before start to 5 hours after start
+            window_start = start - timedelta(minutes=30)
+            window_end = start + timedelta(hours=5)
+            if window_start <= now <= window_end:
+                return True
+
+        return False
+    except Exception:
+        return True  # on error, allow polling
+
+
 async def fetch_live_scores() -> list:
     """Fetch all live IPL scores from cricScore endpoint.
 
-    Cached for 30 seconds — 100 users hitting this simultaneously
-    results in 1 CricAPI call, not 100.
+    Only calls CricAPI when a match could be live (based on fixture schedule).
+    Cached for 30 seconds to prevent API flood from multiple users.
     """
     global _score_cache, _score_cache_time
 
     now = datetime.now(timezone.utc)
+
+    # Don't hit the API outside match windows
+    if not _is_match_window():
+        return _score_cache
     if _score_cache and (now - _score_cache_time) < SCORE_CACHE_TTL:
         return _score_cache
 
