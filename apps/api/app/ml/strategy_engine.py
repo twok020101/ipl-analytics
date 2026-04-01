@@ -587,6 +587,13 @@ def select_playing_11(
             bowlers_count += 1
         remaining.remove(p)
 
+    # Step 0: Captain ALWAYS plays (IPL rule — captain leads the side)
+    captain_id = squad_data[team_short_name].get("captain_id")
+    if captain_id:
+        captain_profile = next((p for p in remaining if p["player_id"] == captain_id), None)
+        if captain_profile:
+            _add(captain_profile)
+
     # Step 1: Ensure at least 1 WK
     wk_candidates = [p for p in remaining if p["is_wk"]]
     if wk_candidates:
