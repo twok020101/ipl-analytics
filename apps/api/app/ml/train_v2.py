@@ -119,9 +119,9 @@ def main():
 
         # Save model
         import joblib
-        model_dir = Path(__file__).resolve().parents[2] / "trained_models"
-        model_dir.mkdir(parents=True, exist_ok=True)
-        model_path = model_dir / "win_probability_v2.joblib"
+        from app.config import MODEL_DIR
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        model_path = MODEL_DIR / "win_probability_v2.joblib"
         joblib.dump({"model": model, "feature_names": feature_names}, model_path)
         print(f"\nModel saved to {model_path}")
 

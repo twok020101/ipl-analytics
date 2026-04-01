@@ -30,3 +30,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+MODEL_DIR = Path(__file__).resolve().parents[1] / "trained_models"

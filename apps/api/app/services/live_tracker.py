@@ -15,24 +15,35 @@ Uses:
 """
 
 import json
-import re
 import httpx
 import logging
+from collections import deque
 from datetime import datetime, timezone, timedelta
-from pathlib import Path
 from typing import Optional
 
 import joblib
 import numpy as np
 
-from app.services.weather import fetch_weather
+from app.config import DATA_DIR, MODEL_DIR
+from app.services.cricapi_utils import parse_score, extract_team_short
+from app.services.weather import fetch_weather, VENUE_COORDS
 from app.services.game_plan_live import recalculate_game_plan
 
 logger = logging.getLogger("live_tracker")
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-MODEL_DIR = Path(__file__).resolve().parents[2] / "trained_models"
 CRICAPI_KEY = None  # Set from config on init
+
+# ML model cache (loaded once from disk)
+_ml_models = None
+
+
+def _get_ml_models():
+    global _ml_models
+    if _ml_models is None:
+        model_path = MODEL_DIR / "live_win_probability.joblib"
+        if model_path.exists():
+            _ml_models = joblib.load(model_path)
+    return _ml_models
 
 # In-memory state for tracked matches
 _tracked_matches: dict = {}
@@ -43,33 +54,6 @@ def init_tracker(api_key: str):
     global CRICAPI_KEY
     CRICAPI_KEY = api_key
     logger.info("Live tracker initialized")
-
-
-def _parse_score(score_str: str) -> dict:
-    """Parse score string like '141/10 (18.4)' into {runs, wickets, overs}."""
-    if not score_str:
-        return {"runs": 0, "wickets": 0, "overs": 0.0}
-    match = re.match(r"(\d+)/(\d+)\s*\((\d+\.?\d*)\)", score_str)
-    if match:
-        return {
-            "runs": int(match.group(1)),
-            "wickets": int(match.group(2)),
-            "overs": float(match.group(3)),
-        }
-    # Try just runs
-    match = re.match(r"(\d+)/(\d+)", score_str)
-    if match:
-        return {"runs": int(match.group(1)), "wickets": int(match.group(2)), "overs": 0.0}
-    return {"runs": 0, "wickets": 0, "overs": 0.0}
-
-
-def _extract_team_short(team_str: str) -> str:
-    """Extract short name from 'Delhi Capitals [DC]' -> 'DC'."""
-    match = re.search(r"\[(\w+)\]", team_str)
-    if match:
-        short = match.group(1)
-        return "RCB" if short == "RCBW" else short
-    return team_str.split()[0]
 
 
 async def fetch_live_scores() -> list:
@@ -92,12 +76,12 @@ async def fetch_live_scores() -> list:
                 if "indian premier" in m.get("series", "").lower():
                     ipl_matches.append({
                         "id": m["id"],
-                        "team1": _extract_team_short(m.get("t1", "")),
-                        "team2": _extract_team_short(m.get("t2", "")),
+                        "team1": extract_team_short(m.get("t1", "")),
+                        "team2": extract_team_short(m.get("t2", "")),
                         "team1_full": m.get("t1", ""),
                         "team2_full": m.get("t2", ""),
-                        "team1_score": _parse_score(m.get("t1s", "")),
-                        "team2_score": _parse_score(m.get("t2s", "")),
+                        "team1_score": parse_score(m.get("t1s", "")),
+                        "team2_score": parse_score(m.get("t2s", "")),
                         "status": m.get("status", ""),
                         "match_state": m.get("ms", ""),  # fixture, live, result
                         "datetime_gmt": m.get("dateTimeGMT", ""),
@@ -159,11 +143,9 @@ def predict_live_win_probability(
     venue_avg: float = 165.0,
 ) -> dict:
     """Use ML model to predict win probability from current match state."""
-    model_path = MODEL_DIR / "live_win_probability.joblib"
-    if not model_path.exists():
+    models = _get_ml_models()
+    if models is None:
         return _heuristic_probability(innings, runs, wickets, overs, target, venue_avg)
-
-    models = joblib.load(model_path)
 
     if innings == 1:
         model = models["model_1st_innings"]
@@ -234,13 +216,8 @@ def _heuristic_probability(innings, runs, wickets, overs, target, venue_avg):
 def _extract_venue_city(match: dict) -> Optional[str]:
     """Try to extract venue city from match status or team names."""
     status = match.get("status", "")
-    # Common patterns: "at Wankhede Stadium, Mumbai" or city names in status
-    city_keywords = [
-        "Mumbai", "Chennai", "Bengaluru", "Kolkata", "Delhi", "Hyderabad",
-        "Jaipur", "Lucknow", "Ahmedabad", "Chandigarh", "Dharamsala",
-        "Guwahati", "Raipur",
-    ]
-    for city in city_keywords:
+    # Use VENUE_COORDS keys as the canonical city list
+    for city in VENUE_COORDS:
         if city.lower() in status.lower():
             return city
     return None
@@ -312,7 +289,7 @@ async def build_live_match_state(match: dict, include_weather: bool = True) -> d
             # Add game plan
             game_plan = recalculate_game_plan(
                 innings=1, runs=t1["runs"], wickets=t1["wickets"],
-                overs=t1["overs"], weather=weather,
+                overs=t1["overs"], weather=weather, win_prob=win_prob,
             )
             result["game_plan"] = game_plan
             return result
@@ -335,7 +312,7 @@ async def build_live_match_state(match: dict, include_weather: bool = True) -> d
             # Add game plan
             game_plan = recalculate_game_plan(
                 innings=1, runs=t2["runs"], wickets=t2["wickets"],
-                overs=t2["overs"], weather=weather,
+                overs=t2["overs"], weather=weather, win_prob=win_prob,
             )
             result["game_plan"] = game_plan
             return result
@@ -370,7 +347,7 @@ async def build_live_match_state(match: dict, include_weather: bool = True) -> d
         # Add game plan for 2nd innings
         game_plan = recalculate_game_plan(
             innings=2, runs=chase_score["runs"], wickets=chase_score["wickets"],
-            overs=chase_score["overs"], target=target, weather=weather,
+            overs=chase_score["overs"], target=target, weather=weather, win_prob=win_prob,
         )
         result["game_plan"] = game_plan
 
@@ -384,13 +361,13 @@ async def build_live_match_state(match: dict, include_weather: bool = True) -> d
 
 
 # Store match history for game plan evolution
-_match_history: dict = {}  # match_id -> list of snapshots
+_match_history: dict = {}  # match_id -> deque of snapshots (max 60)
 
 
 def record_snapshot(match_id: str, state: dict):
     """Record a score snapshot for tracking game plan changes."""
     if match_id not in _match_history:
-        _match_history[match_id] = []
+        _match_history[match_id] = deque(maxlen=60)
     _match_history[match_id].append({
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **state,
@@ -399,7 +376,7 @@ def record_snapshot(match_id: str, state: dict):
 
 def get_match_history(match_id: str) -> list:
     """Get all snapshots for a match."""
-    return _match_history.get(match_id, [])
+    return list(_match_history.get(match_id, []))
 
 
 async def poll_and_update() -> list:

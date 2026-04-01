@@ -14,6 +14,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_, or_, cast, Integer, Float
 
+from app.config import DATA_DIR
 from app.models.models import (
     Team,
     Player,
@@ -26,7 +27,6 @@ from app.models.models import (
     VenueStats,
 )
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 # ---------------------------------------------------------------------------
 # IPL 2026 Official Rules

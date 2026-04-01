@@ -16,6 +16,7 @@ from sqlalchemy import func, case, and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.config import DATA_DIR
 from app.models.models import (
     Team,
     Player,
@@ -32,8 +33,6 @@ from app.services.gemini import fetch_player_news
 from app.ml.strategy_engine import select_playing_11, recommend_toss_decision
 
 router = APIRouter(tags=["analysis"])
-
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 # Phase boundaries (0-indexed over numbers)
 POWERPLAY = (0, 5)

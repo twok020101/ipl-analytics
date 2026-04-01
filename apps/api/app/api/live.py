@@ -36,19 +36,15 @@ if settings.CRICAPI_KEY:
 
 
 @router.get("/scores")
-async def get_live_scores(db: Session = Depends(get_db)):
+async def get_live_scores():
     """Get all live IPL match scores with ML win predictions.
 
     Uses cricScore endpoint (1 API call for ALL matches).
     Each live match includes real-time win probability from XGBoost model.
-    Also auto-syncs completed match results to DB.
+    Syncing is handled by the daily background loop and the /live/sync endpoint.
     """
     matches = await fetch_live_scores()
 
-    # Background sync: update any newly completed matches
-    has_results = any(m["match_state"] == "result" for m in matches)
-    if has_results:
-        await sync_results(db)
     live_states = []
     upcoming = []
     results = []

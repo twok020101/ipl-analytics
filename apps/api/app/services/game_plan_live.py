@@ -12,14 +12,16 @@ def recalculate_game_plan(
     target: int = 0,
     venue_avg: float = 165.0,
     weather: dict = None,
+    win_prob: dict = None,
 ) -> dict:
     """Generate updated game plan based on current match situation.
 
     Returns tactical advice for BOTH teams -- batting team and bowling team.
     """
-    # Lazy import to avoid circular dependency with live_tracker
-    from app.services.live_tracker import predict_live_win_probability
-    win_prob = predict_live_win_probability(innings, runs, wickets, overs, target, venue_avg)
+    if win_prob is None:
+        # Lazy import to avoid circular dependency with live_tracker
+        from app.services.live_tracker import predict_live_win_probability
+        win_prob = predict_live_win_probability(innings, runs, wickets, overs, target, venue_avg)
 
     over_num = int(overs)
     balls_bowled = int(over_num * 6 + round((overs - over_num) * 10))

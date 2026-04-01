@@ -5,37 +5,18 @@ Call after every match completes or periodically to keep data fresh.
 """
 
 import json
-import re
 import logging
 from pathlib import Path
 from datetime import date
+import re
 
 import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.models.models import Match, Team
-from app.config import settings
-
-logger = logging.getLogger("match_sync")
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-
-
-def _parse_score(score_str: str) -> dict:
-    """Parse '145/4 (17.1)' -> {runs: 145, wickets: 4, overs: 17.1}"""
-    if not score_str:
-        return {}
-    m = re.match(r"(\d+)/(\d+)\s*\((\d+\.?\d*)\)", score_str)
-    if m:
-        return {"runs": int(m.group(1)), "wickets": int(m.group(2)), "overs": float(m.group(3))}
-    return {}
-
-
-def _extract_short(team_str: str) -> str:
-    """'Delhi Capitals [DC]' -> 'DC'"""
-    m = re.search(r"\[(\w+)\]", team_str)
-    short = m.group(1) if m else ""
-    return "RCB" if short == "RCBW" else short
+from app.config import settings, DATA_DIR
+from app.services.cricapi_utils import parse_score, extract_team_short
 
 
 async def sync_results(db: Session) -> dict:
@@ -66,22 +47,25 @@ async def sync_results(db: Session) -> dict:
     updated_db = []
     updated_cache = []
 
+    # Pre-load all teams once to avoid per-match queries
+    all_teams = {t.short_name: t for t in db.query(Team).all()}
+
     for m in ipl_matches:
         if m.get("ms") != "result":
             continue
 
-        t1_short = _extract_short(m.get("t1", ""))
-        t2_short = _extract_short(m.get("t2", ""))
+        t1_short = extract_team_short(m.get("t1", ""))
+        t2_short = extract_team_short(m.get("t2", ""))
         status = m.get("status", "")
-        t1_score = _parse_score(m.get("t1s", ""))
-        t2_score = _parse_score(m.get("t2s", ""))
+        t1_score = parse_score(m.get("t1s", ""))
+        t2_score = parse_score(m.get("t2s", ""))
 
         if not t1_short or not t2_short:
             continue
 
         # Find match in DB
-        team1 = db.query(Team).filter(Team.short_name == t1_short).first()
-        team2 = db.query(Team).filter(Team.short_name == t2_short).first()
+        team1 = all_teams.get(t1_short)
+        team2 = all_teams.get(t2_short)
         if not team1 or not team2:
             continue
 
