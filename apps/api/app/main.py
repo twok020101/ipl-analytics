@@ -33,10 +33,6 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://ipl.thetwok.in")
 async def lifespan(app: FastAPI):
     """Startup: ensure DB exists, run ingestion if needed."""
     if settings.DATABASE_URL.startswith("postgresql"):
-        # PostgreSQL: drop and recreate auth tables if schema changed, then create all
-        from app.models.models import User, Organization
-        User.__table__.drop(engine, checkfirst=True)
-        Organization.__table__.drop(engine, checkfirst=True)
         Base.metadata.create_all(engine)
         print("PostgreSQL database ready.")
     elif not DB_PATH.exists():
