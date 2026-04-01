@@ -22,10 +22,12 @@ import {
   CalendarDays,
   LogOut,
   Loader2,
+  Radio,
 } from "lucide-react";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/live", label: "Live", icon: Radio },
   { href: "/fixtures", label: "IPL 2026", icon: CalendarDays },
   { href: "/predict", label: "Match Analyzer", icon: Target },
   { href: "/standings", label: "Standings", icon: Trophy },

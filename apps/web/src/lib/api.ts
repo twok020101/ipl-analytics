@@ -140,6 +140,11 @@ export const fetchDashboardStats = () => fetchAPI<DashboardStats>("/dashboard/st
 export const fetchMatchAnalysis = (data: { team1: string; team2: string; venue_id: number }) =>
   fetchAPI<Record<string, unknown>>("/analysis/match", { method: "POST", body: JSON.stringify(data) });
 
+// Live Match Tracking
+export const fetchLiveScores = () => fetchAPI<Record<string, unknown>>("/live/scores");
+export const fetchLiveMatch = (id: string) => fetchAPI<Record<string, unknown>>(`/live/match/${id}`);
+export const fetchLiveGamePlan = (id: string) => fetchAPI<Record<string, unknown>>(`/live/match/${id}/gameplan`);
+
 // External — IPL 2026
 import type { Fixture, Squad } from "./types";
 

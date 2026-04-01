@@ -25,6 +25,9 @@ from typing import Optional
 import joblib
 import numpy as np
 
+from app.services.weather import fetch_weather
+from app.services.game_plan_live import recalculate_game_plan
+
 logger = logging.getLogger("live_tracker")
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -228,7 +231,22 @@ def _heuristic_probability(innings, runs, wickets, overs, target, venue_avg):
     }
 
 
-def build_live_match_state(match: dict) -> dict:
+def _extract_venue_city(match: dict) -> Optional[str]:
+    """Try to extract venue city from match status or team names."""
+    status = match.get("status", "")
+    # Common patterns: "at Wankhede Stadium, Mumbai" or city names in status
+    city_keywords = [
+        "Mumbai", "Chennai", "Bengaluru", "Kolkata", "Delhi", "Hyderabad",
+        "Jaipur", "Lucknow", "Ahmedabad", "Chandigarh", "Dharamsala",
+        "Guwahati", "Raipur",
+    ]
+    for city in city_keywords:
+        if city.lower() in status.lower():
+            return city
+    return None
+
+
+async def build_live_match_state(match: dict, include_weather: bool = True) -> dict:
     """Build comprehensive live match state from cricScore data.
 
     cricScore lists teams in fixture order (not batting order).
@@ -249,6 +267,14 @@ def build_live_match_state(match: dict) -> dict:
         "state": state,
     }
 
+    # Fetch weather for the venue city
+    weather = None
+    if include_weather and state == "live":
+        city = _extract_venue_city(match)
+        if city:
+            weather = await fetch_weather(city)
+            result["weather"] = weather
+
     if state == "live":
         # Determine batting order from scores
         # The team whose innings is complete (10 wkts or 20 overs) batted first
@@ -268,7 +294,7 @@ def build_live_match_state(match: dict) -> dict:
             chase_team = match["team2"]
             chase_score = t2
         elif t1["overs"] > 0 and t2["overs"] == 0:
-            # Only team1 has batted — 1st innings
+            # Only team1 has batted -- 1st innings
             result["innings"] = 1
             result["batting_team"] = match["team1"]
             result["bowling_team"] = match["team2"]
@@ -282,9 +308,16 @@ def build_live_match_state(match: dict) -> dict:
                 match["team2"]: win_prob["bowling_team_win_prob"],
             }
             result["prediction_details"] = win_prob
+
+            # Add game plan
+            game_plan = recalculate_game_plan(
+                innings=1, runs=t1["runs"], wickets=t1["wickets"],
+                overs=t1["overs"], weather=weather,
+            )
+            result["game_plan"] = game_plan
             return result
         elif t2["overs"] > 0 and t1["overs"] == 0:
-            # Only team2 has batted — 1st innings
+            # Only team2 has batted -- 1st innings
             result["innings"] = 1
             result["batting_team"] = match["team2"]
             result["bowling_team"] = match["team1"]
@@ -298,9 +331,16 @@ def build_live_match_state(match: dict) -> dict:
                 match["team1"]: win_prob["bowling_team_win_prob"],
             }
             result["prediction_details"] = win_prob
+
+            # Add game plan
+            game_plan = recalculate_game_plan(
+                innings=1, runs=t2["runs"], wickets=t2["wickets"],
+                overs=t2["overs"], weather=weather,
+            )
+            result["game_plan"] = game_plan
             return result
         else:
-            # Both have scores — the one with more overs/wickets batted first
+            # Both have scores -- the one with more overs/wickets batted first
             if t1["overs"] > t2["overs"]:
                 bat_first_team, bat_first_score = match["team1"], t1
                 chase_team, chase_score = match["team2"], t2
@@ -326,6 +366,13 @@ def build_live_match_state(match: dict) -> dict:
             bat_first_team: win_prob["bowling_team_win_prob"],
         }
         result["prediction_details"] = win_prob
+
+        # Add game plan for 2nd innings
+        game_plan = recalculate_game_plan(
+            innings=2, runs=chase_score["runs"], wickets=chase_score["wickets"],
+            overs=chase_score["overs"], target=target, weather=weather,
+        )
+        result["game_plan"] = game_plan
 
     elif state == "result":
         result["final_scores"] = {
@@ -366,7 +413,7 @@ async def poll_and_update() -> list:
 
     for m in matches:
         if m["match_state"] == "live":
-            state = build_live_match_state(m)
+            state = await build_live_match_state(m)
             record_snapshot(m["id"], state)
             live_states.append(state)
 

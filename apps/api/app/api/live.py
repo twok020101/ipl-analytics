@@ -21,7 +21,10 @@ from app.services.live_tracker import (
     predict_live_win_probability,
     poll_and_update,
     get_match_history,
+    _extract_venue_city,
 )
+from app.services.weather import fetch_weather
+from app.services.game_plan_live import recalculate_game_plan
 from app.config import settings
 
 router = APIRouter(prefix="/live", tags=["live"])
@@ -45,7 +48,7 @@ async def get_live_scores():
 
     for m in matches:
         if m["match_state"] == "live":
-            state = build_live_match_state(m)
+            state = await build_live_match_state(m)
             live_states.append(state)
         elif m["match_state"] == "fixture":
             upcoming.append({
@@ -82,7 +85,7 @@ async def get_live_match(match_id: str):
     if not target_match:
         return {"error": "Match not found in live feed"}
 
-    state = build_live_match_state(target_match)
+    state = await build_live_match_state(target_match)
 
     # Try to get playing 11 if match is live
     if target_match["match_state"] == "live":
@@ -96,6 +99,35 @@ async def get_live_match(match_id: str):
 
     state["history"] = get_match_history(match_id)
     return state
+
+
+@router.get("/match/{match_id}/gameplan")
+async def get_match_game_plan(match_id: str):
+    """Get current game plan with weather for a live match."""
+    matches = await fetch_live_scores()
+    target_match = next((m for m in matches if m["id"] == match_id), None)
+
+    if not target_match:
+        return {"error": "Match not found in live feed"}
+
+    if target_match["match_state"] != "live":
+        return {"error": "Match is not live", "state": target_match["match_state"]}
+
+    state = await build_live_match_state(target_match)
+
+    return {
+        "match_id": match_id,
+        "team1": state.get("team1"),
+        "team2": state.get("team2"),
+        "innings": state.get("innings"),
+        "batting_team": state.get("batting_team"),
+        "bowling_team": state.get("bowling_team"),
+        "current_score": state.get("current_score"),
+        "game_plan": state.get("game_plan"),
+        "weather": state.get("weather"),
+        "win_probability": state.get("win_probability"),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/match/{match_id}/history")
