@@ -3,7 +3,7 @@ import jwt
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from app.models.models import User, Organization
+from app.models.models import User, Organization, UserRole
 from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -27,7 +27,7 @@ def create_access_token(user_id: int, email: str, org_id: int = None, role: str 
         "sub": str(user_id),
         "email": email,
         "org_id": org_id,
-        "role": role,
+        "role": role.value if hasattr(role, 'value') else role,
         "exp": expire,
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -57,7 +57,7 @@ def register_user(db: Session, email: str, password: str, name: str, org_name: s
         email=email,
         hashed_password=hash_password(password),
         name=name,
-        role="admin" if org and not db.query(User).filter(User.organization_id == org.id).first() else "analyst",
+        role=UserRole.admin if org and not db.query(User).filter(User.organization_id == org.id).first() else UserRole.analyst,
         organization_id=org.id if org else None,
     )
     db.add(user)

@@ -38,7 +38,7 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
                 "id": user.id,
                 "email": user.email,
                 "name": user.name,
-                "role": user.role,
+                "role": user.role.value if hasattr(user.role, 'value') else user.role,
                 "organization_id": user.organization_id,
             },
         }
@@ -56,7 +56,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
                 "id": user.id,
                 "email": user.email,
                 "name": user.name,
-                "role": user.role,
+                "role": user.role.value if hasattr(user.role, 'value') else user.role,
                 "organization_id": user.organization_id,
             },
         }
@@ -78,7 +78,7 @@ def get_me(authorization: str = Header(None), db: Session = Depends(get_db)):
             "id": user.id,
             "email": user.email,
             "name": user.name,
-            "role": user.role,
+            "role": user.role.value if hasattr(user.role, 'value') else user.role,
             "organization_id": user.organization_id,
         }
     except Exception:

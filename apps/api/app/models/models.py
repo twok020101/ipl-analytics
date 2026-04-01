@@ -1,3 +1,5 @@
+import enum
+
 from sqlalchemy import (
     Column,
     Integer,
@@ -6,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Enum,
     ForeignKey,
     UniqueConstraint,
     Index,
@@ -16,12 +19,74 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+# --- Enums ---
+
+class OrgPlan(str, enum.Enum):
+    free = "free"
+    pro = "pro"
+    enterprise = "enterprise"
+
+
+class UserRole(str, enum.Enum):
+    admin = "admin"
+    analyst = "analyst"
+    viewer = "viewer"
+
+
+class TossDecision(str, enum.Enum):
+    bat = "bat"
+    field = "field"
+
+
+class WinType(str, enum.Enum):
+    runs = "runs"
+    wickets = "wickets"
+
+
+class MatchStage(str, enum.Enum):
+    league = "League"
+    qualifier = "Qualifier"
+    eliminator = "Eliminator"
+    final = "Final"
+
+
+class PlayerRole(str, enum.Enum):
+    batsman = "Batsman"
+    bowler = "Bowler"
+    batting_allrounder = "Batting Allrounder"
+    bowling_allrounder = "Bowling Allrounder"
+    wk_batsman = "WK-Batsman"
+
+
+class ExtraType(str, enum.Enum):
+    wides = "wides"
+    noballs = "noballs"
+    legbyes = "legbyes"
+    byes = "byes"
+    penalty = "penalty"
+
+
+class WicketKind(str, enum.Enum):
+    caught = "caught"
+    bowled = "bowled"
+    lbw = "lbw"
+    run_out = "run out"
+    stumped = "stumped"
+    caught_and_bowled = "caught and bowled"
+    hit_wicket = "hit wicket"
+    retired_hurt = "retired hurt"
+    retired_out = "retired out"
+    obstructing_the_field = "obstructing the field"
+
+
+# --- Auth Models ---
+
 class Organization(Base):
     __tablename__ = "organizations"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(200), nullable=False)
     slug = Column(String(50), unique=True, nullable=False)
-    plan = Column(String(20), default="free")  # free, pro, enterprise
+    plan = Column(Enum(OrgPlan), default=OrgPlan.free, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     users = relationship("User", back_populates="organization")
 
@@ -32,12 +97,14 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     name = Column(String(200), nullable=False)
-    role = Column(String(20), default="analyst")  # admin, analyst, viewer
+    role = Column(Enum(UserRole), default=UserRole.analyst, nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     organization = relationship("Organization", back_populates="users")
 
+
+# --- Cricket Models ---
 
 class Team(Base):
     __tablename__ = "teams"
@@ -56,9 +123,9 @@ class Player(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(150), unique=True, nullable=False)
-    role = Column(String(50), nullable=True)
+    role = Column(String(50), nullable=True)  # kept as String — CricAPI sends varied role strings
     batting_style = Column(String(50), nullable=True)
-    bowling_style = Column(String(50), nullable=True)
+    bowling_style = Column(String(80), nullable=True)
 
     batting_stats = relationship("PlayerSeasonBatting", back_populates="player")
     bowling_stats = relationship("PlayerSeasonBowling", back_populates="player")
@@ -82,17 +149,17 @@ class Match(Base):
     source_match_id = Column(Integer, unique=True, nullable=False, index=True)
     date = Column(Date, nullable=True)
     season = Column(String(20), nullable=True)
-    stage = Column(String(50), nullable=True)
+    stage = Column(String(50), nullable=True)  # kept as String — CSV has "Unknown", "League", etc.
     venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
     team1_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     team2_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     toss_winner_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
-    toss_decision = Column(String(10), nullable=True)
+    toss_decision = Column(String(10), nullable=True)  # "bat" / "field"
     winner_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     win_margin = Column(Integer, nullable=True)
-    win_type = Column(String(20), nullable=True)
+    win_type = Column(String(20), nullable=True)  # "runs" / "wickets"
     player_of_match_id = Column(Integer, ForeignKey("players.id"), nullable=True)
-    method = Column(String(20), nullable=True)
+    method = Column(String(20), nullable=True)  # DLS, etc.
     first_innings_score = Column(Integer, nullable=True)
     first_innings_overs = Column(Float, nullable=True)
     second_innings_score = Column(Integer, nullable=True)
@@ -123,8 +190,8 @@ class Delivery(Base):
     runs_extras = Column(Integer, default=0)
     runs_total = Column(Integer, default=0)
     valid_ball = Column(Boolean, default=True)
-    extra_type = Column(String(50), nullable=True)
-    wicket_kind = Column(String(50), nullable=True)
+    extra_type = Column(String(20), nullable=True)  # kept as String — CSV has varied values
+    wicket_kind = Column(String(50), nullable=True)  # kept as String — CSV has varied values
     player_out_id = Column(Integer, ForeignKey("players.id"), nullable=True)
     team_runs = Column(Integer, nullable=True)
     team_wickets = Column(Integer, nullable=True)
