@@ -18,8 +18,6 @@ trained_models/*.joblib
 IPL.csv
 ipl-dataset2008-2025.zip
 apps/api/ipl_analytics.db
-apps/api/data/ipl2026.json
-apps/api/data/team_squads_2026.json
 apps/api/=1.0.0
 *.db-shm
 *.db-wal
