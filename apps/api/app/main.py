@@ -60,13 +60,23 @@ async def lifespan(app: FastAPI):
 
 
 async def _match_sync_loop():
-    """Background loop: sync match results once daily (midnight IST)."""
+    """Background loop: sync match results daily at 2:00 AM IST."""
+    from datetime import datetime, timezone, timedelta
+
+    IST = timezone(timedelta(hours=5, minutes=30))
     logger = logging.getLogger("match_sync_loop")
-    logger.info("Daily match sync scheduled")
+    logger.info("Daily match sync scheduled for 2:00 AM IST")
 
     while True:
         try:
-            await asyncio.sleep(86400)  # 24 hours
+            # Calculate seconds until next 2:00 AM IST
+            now = datetime.now(IST)
+            target = now.replace(hour=2, minute=0, second=0, microsecond=0)
+            if now >= target:
+                target += timedelta(days=1)
+            wait = (target - now).total_seconds()
+            logger.info(f"Next sync in {wait/3600:.1f} hours (at {target.strftime('%Y-%m-%d %H:%M IST')})")
+            await asyncio.sleep(wait)
 
             # Only sync if CRICAPI key is available
             if not settings.CRICAPI_KEY:
