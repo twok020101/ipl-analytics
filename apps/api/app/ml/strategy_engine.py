@@ -511,13 +511,27 @@ def select_playing_11(
         else:
             composite = bat_score * 0.5 + bowl_score * 0.5
 
-        # Recent form bonus: if they have recent season data, small boost
-        if bat_stats["seasons"] >= 2 or bowl_stats["seasons"] >= 2:
-            composite *= 1.05
+        # Experience multiplier — proven IPL performers get MAJOR boost,
+        # unproven players get heavily penalized
+        total_innings = bat_stats["innings"] + bowl_stats["matches"]
+        if total_innings == 0:
+            # No IPL data at all — heavy penalty
+            composite *= 0.4
+        elif total_innings < 10:
+            # Minimal IPL experience
+            composite *= 0.6
+        elif total_innings < 30:
+            # Some experience
+            composite *= 0.8
+        elif total_innings >= 80:
+            # Very experienced — bonus
+            composite *= 1.15
+        elif total_innings >= 50:
+            composite *= 1.08
 
-        # Experience bonus for players with more innings
-        if bat_stats["innings"] > 50 or bowl_stats["matches"] > 40:
-            composite *= 1.03
+        # Recent form bonus: played in recent seasons
+        if bat_stats["seasons"] >= 3 or bowl_stats["seasons"] >= 3:
+            composite *= 1.05
 
         reasoning_parts = []
         if bat_stats["innings"] > 0:
