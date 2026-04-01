@@ -5,9 +5,11 @@ from sqlalchemy import (
     Float,
     Boolean,
     Date,
+    DateTime,
     ForeignKey,
     UniqueConstraint,
     Index,
+    func,
 )
 from sqlalchemy.orm import relationship
 
@@ -20,7 +22,7 @@ class Organization(Base):
     name = Column(String(200), nullable=False)
     slug = Column(String(50), unique=True, nullable=False)
     plan = Column(String(20), default="free")  # free, pro, enterprise
-    created_at = Column(String(30), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
     users = relationship("User", back_populates="organization")
 
 
@@ -33,7 +35,7 @@ class User(Base):
     role = Column(String(20), default="analyst")  # admin, analyst, viewer
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(String(30), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
     organization = relationship("Organization", back_populates="users")
 
 

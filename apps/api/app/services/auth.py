@@ -49,7 +49,7 @@ def register_user(db: Session, email: str, password: str, name: str, org_name: s
         slug = org_name.lower().replace(" ", "-")[:50]
         org = db.query(Organization).filter(Organization.slug == slug).first()
         if not org:
-            org = Organization(name=org_name, slug=slug, created_at=datetime.now(timezone.utc).isoformat())
+            org = Organization(name=org_name, slug=slug)
             db.add(org)
             db.flush()
 
@@ -59,7 +59,6 @@ def register_user(db: Session, email: str, password: str, name: str, org_name: s
         name=name,
         role="admin" if org and not db.query(User).filter(User.organization_id == org.id).first() else "analyst",
         organization_id=org.id if org else None,
-        created_at=datetime.now(timezone.utc).isoformat(),
     )
     db.add(user)
     db.commit()
