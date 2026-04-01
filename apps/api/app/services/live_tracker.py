@@ -33,6 +33,11 @@ logger = logging.getLogger("live_tracker")
 
 CRICAPI_KEY = None  # Set from config on init
 
+# Score cache — avoids hitting CricAPI on every user request
+_score_cache: list = []
+_score_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
+SCORE_CACHE_TTL = timedelta(seconds=30)
+
 # ML model cache (loaded once from disk)
 _ml_models = None
 
@@ -57,7 +62,17 @@ def init_tracker(api_key: str):
 
 
 async def fetch_live_scores() -> list:
-    """Fetch all live IPL scores from cricScore endpoint (1 API call)."""
+    """Fetch all live IPL scores from cricScore endpoint.
+
+    Cached for 30 seconds — 100 users hitting this simultaneously
+    results in 1 CricAPI call, not 100.
+    """
+    global _score_cache, _score_cache_time
+
+    now = datetime.now(timezone.utc)
+    if _score_cache and (now - _score_cache_time) < SCORE_CACHE_TTL:
+        return _score_cache
+
     if not CRICAPI_KEY:
         return []
     try:
@@ -69,7 +84,7 @@ async def fetch_live_scores() -> list:
             data = resp.json()
             if data.get("status") != "success":
                 logger.warning(f"cricScore failed: {data.get('reason')}")
-                return []
+                return _score_cache  # return stale cache on API failure
 
             ipl_matches = []
             for m in data.get("data", []):
@@ -83,13 +98,16 @@ async def fetch_live_scores() -> list:
                         "team1_score": parse_score(m.get("t1s", "")),
                         "team2_score": parse_score(m.get("t2s", "")),
                         "status": m.get("status", ""),
-                        "match_state": m.get("ms", ""),  # fixture, live, result
+                        "match_state": m.get("ms", ""),
                         "datetime_gmt": m.get("dateTimeGMT", ""),
                     })
+
+            _score_cache = ipl_matches
+            _score_cache_time = now
             return ipl_matches
     except Exception as e:
         logger.error(f"Error fetching live scores: {e}")
-        return []
+        return _score_cache  # return stale cache on error
 
 
 async def fetch_match_playing11(match_id: str) -> dict:
