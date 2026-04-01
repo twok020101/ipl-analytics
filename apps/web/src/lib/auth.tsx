@@ -1,7 +1,11 @@
 "use client";
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://ipl-api.thetwok.in/api/v1";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (
+  typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:8000/api/v1"
+    : "https://ipl-api.thetwok.in/api/v1"
+);
 
 interface User {
   id: number;

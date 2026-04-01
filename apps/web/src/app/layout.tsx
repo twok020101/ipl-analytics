@@ -1,7 +1,7 @@
 "use client";
 
 import "./globals.css";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Providers } from "./providers";
@@ -133,17 +133,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!loading && !user && pathname !== "/login") {
+      router.push("/login");
+    }
+  }, [loading, user, pathname, router]);
 
-  if (!user && pathname !== "/login") {
-    // Client-side redirect
-    router.push("/login");
+  if (loading || (!user && pathname !== "/login")) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
