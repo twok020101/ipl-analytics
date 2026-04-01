@@ -20,10 +20,17 @@ import type {
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const token = typeof window !== "undefined" ? localStorage.getItem("ipl_token") : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${BASE_URL}${endpoint}`, { headers, ...options });
+  if (res.status === 401) {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("ipl_token");
+      window.location.href = "/login";
+    }
+    throw new Error("Unauthorized");
+  }
   if (!res.ok) {
     throw new Error(`API Error: ${res.status} ${res.statusText}`);
   }

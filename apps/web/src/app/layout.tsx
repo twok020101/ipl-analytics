@@ -3,15 +3,15 @@
 import "./globals.css";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Providers } from "./providers";
+import { AuthProvider, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Users,
   UserCircle,
   Target,
-  Swords,
   GitCompareArrows,
   MapPin,
   BrainCircuit,
@@ -20,6 +20,8 @@ import {
   X,
   Zap,
   CalendarDays,
+  LogOut,
+  Loader2,
 } from "lucide-react";
 
 const navItems = [
@@ -36,6 +38,7 @@ const navItems = [
 
 function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   return (
     <aside
@@ -90,7 +93,29 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
       </nav>
 
       <div className="p-4 border-t border-gray-800">
-        {!collapsed && (
+        {!collapsed && user && (
+          <div className="space-y-2">
+            <p className="text-sm text-foreground font-medium truncate">{user.name}</p>
+            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            <button
+              onClick={logout}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-red-400 transition-colors w-full mt-1"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
+          </div>
+        )}
+        {collapsed && user && (
+          <button
+            onClick={logout}
+            className="mx-auto block text-muted-foreground hover:text-red-400 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        )}
+        {!collapsed && !user && (
           <p className="text-xs text-muted-foreground text-center">
             IPL Analytics Platform v1.0
           </p>
@@ -100,9 +125,50 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
   );
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user && pathname !== "/login") {
+    // Client-side redirect
+    router.push("/login");
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
+
+  return (
+    <>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <main
+        className={cn(
+          "min-h-screen transition-all duration-300",
+          collapsed ? "ml-16" : "ml-64"
+        )}
+      >
+        <div className="p-6 lg:p-8">{children}</div>
+      </main>
+    </>
+  );
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
       <head>
@@ -115,15 +181,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-background font-sans antialiased" style={{ fontFamily: "'Inter', sans-serif" }}>
         <Providers>
-          <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
-          <main
-            className={cn(
-              "min-h-screen transition-all duration-300",
-              collapsed ? "ml-16" : "ml-64"
-            )}
-          >
-            <div className="p-6 lg:p-8">{children}</div>
-          </main>
+          <AuthProvider>
+            <AuthGate>{children}</AuthGate>
+          </AuthProvider>
         </Providers>
       </body>
     </html>

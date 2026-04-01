@@ -14,6 +14,29 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 
+class Organization(Base):
+    __tablename__ = "organizations"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False)
+    slug = Column(String(50), unique=True, nullable=False)
+    plan = Column(String(20), default="free")  # free, pro, enterprise
+    created_at = Column(String(30), nullable=True)
+    users = relationship("User", back_populates="organization")
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    name = Column(String(200), nullable=False)
+    role = Column(String(20), default="analyst")  # admin, analyst, viewer
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(String(30), nullable=True)
+    organization = relationship("Organization", back_populates="users")
+
+
 class Team(Base):
     __tablename__ = "teams"
 

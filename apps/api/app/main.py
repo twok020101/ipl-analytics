@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
+from app.config import settings
 from app.api.teams import router as teams_router
 from app.api.players import router as players_router
 from app.api.venues import router as venues_router
@@ -19,14 +20,20 @@ from app.api.season import router as season_router
 from app.api.dashboard import router as dashboard_router
 from app.api.external import router as external_router
 from app.api.analysis import router as analysis_router
+from app.api.auth import router as auth_router
 
 DB_PATH = Path(__file__).resolve().parents[1] / "ipl_analytics.db"
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: ensure DB exists, run ingestion if needed."""
-    if not DB_PATH.exists():
+    if settings.DATABASE_URL.startswith("postgresql"):
+        # PostgreSQL: always ensure tables exist
+        Base.metadata.create_all(engine)
+        print("PostgreSQL database ready.")
+    elif not DB_PATH.exists():
         print("Database not found. Running initial data ingestion ...")
         from app.ingestion.load_csv import run_ingestion
 
@@ -54,6 +61,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        FRONTEND_URL,
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:5173",
@@ -75,6 +83,7 @@ app.include_router(season_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(external_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1")
 
 
 @app.get("/health")
