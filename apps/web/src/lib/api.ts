@@ -163,6 +163,8 @@ import type { PartnershipData, RunDistributionData, WicketTypesData, PlayerCompa
 
 export const fetchPartnerships = (matchId: number, innings = 1) =>
   fetchAPI<PartnershipData>(`/viz/partnerships/${matchId}?innings=${innings}`);
+export const fetchPlayerPartnerships = (playerId: number, limit = 10) =>
+  fetchAPI<PartnershipData>(`/viz/partnerships/player/${playerId}?limit=${limit}`);
 export const fetchRunDistribution = (playerId: number, season?: string) =>
   fetchAPI<RunDistributionData>(`/viz/run-distribution/${playerId}${season ? `?season=${season}` : ""}`);
 export const fetchWicketTypes = (playerId: number, mode = "batter", season?: string) => {

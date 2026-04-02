@@ -72,6 +72,99 @@ def get_partnerships(
     return {"match_id": match_id, "innings": innings, "partnerships": partnerships}
 
 
+@router.get("/partnerships/player/{player_id}")
+def get_player_partnerships(
+    player_id: int,
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db),
+):
+    """Get top batting partnerships for a player across all matches."""
+    player = db.query(Player).get(player_id)
+    if not player:
+        raise HTTPException(404, "Player not found")
+
+    # Find all matches this player batted in
+    match_ids_q = (
+        db.query(Delivery.match_id)
+        .filter(Delivery.batter_id == player_id)
+        .distinct()
+        .subquery()
+    )
+
+    # Get all deliveries from those matches where this player was batting or at non-striker
+    deliveries = (
+        db.query(
+            Delivery.match_id, Delivery.innings, Delivery.over_num, Delivery.ball_num,
+            Delivery.batter_id, Delivery.non_striker_id, Delivery.runs_total, Delivery.valid_ball,
+        )
+        .filter(
+            Delivery.match_id.in_(match_ids_q),
+            ((Delivery.batter_id == player_id) | (Delivery.non_striker_id == player_id)),
+        )
+        .order_by(Delivery.match_id, Delivery.innings, Delivery.over_num, Delivery.ball_num)
+        .all()
+    )
+
+    # Aggregate partnerships by partner
+    partner_stats: dict[int, dict] = {}
+    current_key = None
+    current_partner = None
+    current_runs = 0
+    current_balls = 0
+
+    for d in deliveries:
+        partner_id = d.non_striker_id if d.batter_id == player_id else d.batter_id
+        key = (d.match_id, d.innings, partner_id)
+
+        if key != current_key:
+            if current_key is not None and current_partner is not None:
+                if current_partner not in partner_stats:
+                    partner_stats[current_partner] = {"runs": 0, "balls": 0, "innings": 0}
+                partner_stats[current_partner]["runs"] += current_runs
+                partner_stats[current_partner]["balls"] += current_balls
+                partner_stats[current_partner]["innings"] += 1
+            current_key = key
+            current_partner = partner_id
+            current_runs = 0
+            current_balls = 0
+
+        current_runs += d.runs_total
+        if d.valid_ball:
+            current_balls += 1
+
+    # Last partnership
+    if current_key is not None and current_partner is not None:
+        if current_partner not in partner_stats:
+            partner_stats[current_partner] = {"runs": 0, "balls": 0, "innings": 0}
+        partner_stats[current_partner]["runs"] += current_runs
+        partner_stats[current_partner]["balls"] += current_balls
+        partner_stats[current_partner]["innings"] += 1
+
+    # Sort by total runs and take top N
+    sorted_partners = sorted(partner_stats.items(), key=lambda x: -x[1]["runs"])[:limit]
+
+    # Batch-load partner names
+    partner_ids = [pid for pid, _ in sorted_partners]
+    name_map = {p.id: p.name for p in db.query(Player).filter(Player.id.in_(partner_ids)).all()} if partner_ids else {}
+
+    partnerships = [
+        {
+            "batter1": {"id": player_id, "name": player.name},
+            "batter2": {"id": pid, "name": name_map.get(pid, "Unknown")},
+            "runs": stats["runs"],
+            "balls": stats["balls"],
+            "innings": stats["innings"],
+        }
+        for pid, stats in sorted_partners
+    ]
+
+    return {
+        "player_id": player_id,
+        "player_name": player.name,
+        "partnerships": partnerships,
+    }
+
+
 @router.get("/run-distribution/{player_id}")
 def get_run_distribution(
     player_id: int,

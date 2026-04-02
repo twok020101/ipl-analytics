@@ -267,11 +267,14 @@ export interface Partnership {
   batter2: { id: number; name: string };
   runs: number;
   balls: number;
+  innings?: number;
 }
 
 export interface PartnershipData {
-  match_id: number;
-  innings: number;
+  match_id?: number;
+  innings?: number;
+  player_id?: number;
+  player_name?: string;
   partnerships: Partnership[];
 }
 

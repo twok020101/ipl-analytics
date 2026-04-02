@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { fetchPlayer, fetchPlayerBatting, fetchPlayerBowling, fetchPlayerForm, fetchRunDistribution, fetchWicketTypes } from "@/lib/api";
+import { fetchPlayer, fetchPlayerBatting, fetchPlayerBowling, fetchPlayerForm, fetchRunDistribution, fetchWicketTypes, fetchPlayerPartnerships } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -11,6 +11,7 @@ import { SpiderChart } from "@/components/charts/SpiderChart";
 import { FormLineChart } from "@/components/charts/FormLineChart";
 import { WagonWheel } from "@/components/charts/WagonWheel";
 import { PitchMap } from "@/components/charts/PitchMap";
+import { PartnershipBars } from "@/components/charts/PartnershipBars";
 import { DataTable } from "@/components/tables/DataTable";
 import { ArrowLeft, User, Award, TrendingUp } from "lucide-react";
 import Link from "next/link";
@@ -53,6 +54,12 @@ export default function PlayerDetailPage() {
   const { data: wicketData } = useQuery({
     queryKey: ["wicket-types", playerId],
     queryFn: () => fetchWicketTypes(playerId, "batter"),
+    enabled: !!player,
+  });
+
+  const { data: partnershipData } = useQuery({
+    queryKey: ["player-partnerships", playerId],
+    queryFn: () => fetchPlayerPartnerships(playerId),
     enabled: !!player,
   });
 
@@ -243,6 +250,19 @@ export default function PlayerDetailPage() {
           </Card>
         )}
       </div>
+
+      {/* Top Partnerships */}
+      {partnershipData && partnershipData.partnerships && partnershipData.partnerships.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top Batting Partnerships</CardTitle>
+            <p className="text-xs text-muted-foreground">Aggregate runs across all IPL innings</p>
+          </CardHeader>
+          <CardContent>
+            <PartnershipBars partnerships={partnershipData.partnerships} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Tables */}
       <Tabs defaultValue="batting">
