@@ -26,6 +26,7 @@ class Playing11Request(BaseModel):
     opposition: str
     venue_id: int
     season: str = "2026"
+    unavailable_player_ids: list[int] = []
 
 
 class TossDecisionRequest(BaseModel):
@@ -119,6 +120,7 @@ def get_playing_11(req: Playing11Request, db: Session = Depends(get_db)):
             opposition_short_name=req.opposition,
             venue_id=req.venue_id,
             season=req.season,
+            unavailable_player_ids=set(req.unavailable_player_ids) if req.unavailable_player_ids else None,
         )
         if "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
