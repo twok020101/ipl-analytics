@@ -42,6 +42,22 @@ function CompareStat({
   );
 }
 
+function CompareSection({ title, name1, name2, children }: { title: string; name1: string; name2: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-3 gap-2 items-center pb-2 border-b border-gray-700 mb-1">
+          <div className="text-right text-xs font-medium text-primary">{name1.split(" ").pop()}</div>
+          <div className="text-center text-xs font-medium text-muted-foreground">Stat</div>
+          <div className="text-left text-xs font-medium text-red-400">{name2.split(" ").pop()}</div>
+        </div>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PlayerCompareView({ data }: { data: PlayerCompareResult }) {
   const { player1: p1, player2: p2 } = data;
 
@@ -125,14 +141,7 @@ function PlayerCompareView({ data }: { data: PlayerCompareResult }) {
       </div>
 
       {/* Batting Comparison */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Batting Comparison</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-2 items-center pb-2 border-b border-gray-700 mb-1">
-            <div className="text-right text-xs font-medium text-primary">{p1.name.split(" ").pop()}</div>
-            <div className="text-center text-xs font-medium text-muted-foreground">Stat</div>
-            <div className="text-left text-xs font-medium text-red-400">{p2.name.split(" ").pop()}</div>
-          </div>
+      <CompareSection title="Batting Comparison" name1={p1.name} name2={p2.name}>
           <CompareStat label="Matches" val1={p1.batting.matches} val2={p2.batting.matches} format={fmtInt} />
           <CompareStat label="Innings" val1={p1.batting.innings} val2={p2.batting.innings} format={fmtInt} />
           <CompareStat label="Runs" val1={p1.batting.runs} val2={p2.batting.runs} format={fmtInt} />
@@ -143,26 +152,16 @@ function PlayerCompareView({ data }: { data: PlayerCompareResult }) {
           <CompareStat label="100s" val1={p1.batting.hundreds} val2={p2.batting.hundreds} format={fmtInt} />
           <CompareStat label="4s" val1={p1.batting.fours} val2={p2.batting.fours} format={fmtInt} />
           <CompareStat label="6s" val1={p1.batting.sixes} val2={p2.batting.sixes} format={fmtInt} />
-        </CardContent>
-      </Card>
+      </CompareSection>
 
-      {/* Bowling Comparison (if both have wickets) */}
       {(p1.bowling.wickets > 0 || p2.bowling.wickets > 0) && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Bowling Comparison</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-3 gap-2 items-center pb-2 border-b border-gray-700 mb-1">
-              <div className="text-right text-xs font-medium text-primary">{p1.name.split(" ").pop()}</div>
-              <div className="text-center text-xs font-medium text-muted-foreground">Stat</div>
-              <div className="text-left text-xs font-medium text-red-400">{p2.name.split(" ").pop()}</div>
-            </div>
+        <CompareSection title="Bowling Comparison" name1={p1.name} name2={p2.name}>
             <CompareStat label="Wickets" val1={p1.bowling.wickets} val2={p2.bowling.wickets} format={fmtInt} />
             <CompareStat label="Economy" val1={p1.bowling.economy} val2={p2.bowling.economy} format={fmtDec} higherIsBetter={false} />
             <CompareStat label="Average" val1={p1.bowling.average} val2={p2.bowling.average} format={fmtDec} higherIsBetter={false} />
             <CompareStat label="4W Hauls" val1={p1.bowling.four_wickets} val2={p2.bowling.four_wickets} format={fmtInt} />
             <CompareStat label="5W Hauls" val1={p1.bowling.five_wickets} val2={p2.bowling.five_wickets} format={fmtInt} />
-          </CardContent>
-        </Card>
+        </CompareSection>
       )}
     </div>
   );

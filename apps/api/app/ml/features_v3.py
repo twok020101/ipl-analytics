@@ -16,7 +16,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from app.ml.features_v2 import load_all_data, _compute_match_features
+from app.ml.features_v2 import load_all_data, _compute_match_features, merge_innings_data, build_team_match_records
 
 
 def load_squad_data(db: Session) -> dict:
@@ -58,12 +58,8 @@ def load_squad_data(db: Session) -> dict:
     return {"batting": batting, "bowling": bowling, "players": players}
 
 
-def _compute_squad_features(team_id: int, season: str, squad_data: dict, prior_batting: pd.DataFrame) -> list:
-    """Compute squad composition features for a team.
-
-    Uses batting/bowling aggregates for players who played for the team
-    in seasons up to (but not including) the current one.
-    """
+def _compute_squad_features(team_id: int, squad_data: dict) -> list:
+    """Compute squad composition features for a team using all-time aggregates."""
     bat = squad_data["batting"]
     bowl = squad_data["bowling"]
     players = squad_data["players"]
@@ -169,50 +165,8 @@ def build_feature_matrix_v3(data: dict, squad_data: dict) -> tuple:
     Returns (X, y, match_ids, seasons, feature_names).
     """
     matches = data["matches"].copy()
-    innings = data["innings_stats"]
-
-    # Merge innings data (same as V2)
-    inn1 = innings[innings["innings"] == 1].rename(
-        columns={c: f"inn1_{c}" for c in innings.columns if c not in ("match_id", "innings")}
-    )
-    inn2 = innings[innings["innings"] == 2].rename(
-        columns={c: f"inn2_{c}" for c in innings.columns if c not in ("match_id", "innings")}
-    )
-    matches = matches.merge(inn1.drop(columns=["innings"]), left_on="id", right_on="match_id", how="left")
-    matches = matches.merge(inn2.drop(columns=["innings"]), left_on="id", right_on="match_id", how="left", suffixes=("", "_2"))
-
-    # Build team-match records for V2 rolling features
-    team_match_records = []
-    for _, m in matches.iterrows():
-        for team_col, opp_col, batting_first in [("team1_id", "team2_id", True), ("team2_id", "team1_id", False)]:
-            team_id = m[team_col]
-            won = 1 if m["winner_id"] == team_id else 0
-
-            if batting_first:
-                score = m.get("inn1_total_runs", m.get("first_innings_score"))
-                pp = m.get("inn1_pp_runs")
-                death = m.get("inn1_death_runs")
-                bounds = m.get("inn1_boundaries")
-                s6 = m.get("inn1_sixes")
-                dots = m.get("inn1_dots")
-            else:
-                score = m.get("inn2_total_runs", m.get("second_innings_score"))
-                pp = m.get("inn2_pp_runs")
-                death = m.get("inn2_death_runs")
-                bounds = m.get("inn2_boundaries")
-                s6 = m.get("inn2_sixes")
-                dots = m.get("inn2_dots")
-
-            team_match_records.append({
-                "match_id": m["id"], "date": m["date"], "team_id": team_id,
-                "opp_id": m[opp_col], "venue_id": m["venue_id"],
-                "batting_first": batting_first, "won": won,
-                "score": score, "opp_score": None,
-                "pp_runs": pp, "death_runs": death,
-                "boundaries": bounds, "sixes": s6, "dots": dots,
-            })
-
-    tmr = pd.DataFrame(team_match_records)
+    matches = merge_innings_data(matches, data["innings_stats"])
+    tmr = build_team_match_records(matches)
 
     feature_rows = []
     feature_names = None
@@ -228,8 +182,8 @@ def build_feature_matrix_v3(data: dict, squad_data: dict) -> tuple:
             continue
 
         # V3 squad features for team1 and team2
-        t1_squad = _compute_squad_features(m["team1_id"], m["season"], squad_data, None)
-        t2_squad = _compute_squad_features(m["team2_id"], m["season"], squad_data, None)
+        t1_squad = _compute_squad_features(m["team1_id"], squad_data)
+        t2_squad = _compute_squad_features(m["team2_id"], squad_data)
 
         # Combine: V2 + t1_squad + t2_squad
         all_features = np.concatenate([
@@ -272,8 +226,8 @@ def build_prediction_features_v3(db: Session, team1_id: int, team2_id: int,
 
     # Squad features
     squad_data = load_squad_data(db)
-    t1_squad = _compute_squad_features(team1_id, "2026", squad_data, None)
-    t2_squad = _compute_squad_features(team2_id, "2026", squad_data, None)
+    t1_squad = _compute_squad_features(team1_id, squad_data)
+    t2_squad = _compute_squad_features(team2_id, squad_data)
 
     return np.concatenate([
         v2_features,

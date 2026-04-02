@@ -1,7 +1,7 @@
 "use client";
 
 import "./globals.css";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Providers } from "./providers";
@@ -188,12 +188,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const closeMobile = useCallback(() => setMobileOpen(false), []);
-
-  // Close mobile nav on route change
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
+  const closeMobile = () => setMobileOpen(false);
 
   useEffect(() => {
     if (!loading && !user && pathname !== "/login") {

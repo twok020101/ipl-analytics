@@ -11,19 +11,15 @@ router = APIRouter(prefix="/cron", tags=["cron"])
 logger = logging.getLogger("cron")
 
 
-@router.post("/refresh-squads")
-async def refresh_squads(
-    x_cron_secret: str = Header(None, alias="X-Cron-Secret"),
-):
-    """Refresh IPL 2026 squad and fixture data from CricAPI.
-
-    Called by Railway cron job. Optionally secured via X-Cron-Secret header
-    matching JWT_SECRET.
-    """
-    # Optional auth: if JWT_SECRET is set, require it as cron secret
+def verify_cron_secret(x_cron_secret: str = Header(None, alias="X-Cron-Secret")):
+    """Validate cron secret if JWT_SECRET is configured."""
     if settings.JWT_SECRET and x_cron_secret != settings.JWT_SECRET:
         raise HTTPException(403, "Invalid cron secret")
 
+
+@router.post("/refresh-squads")
+async def refresh_squads(_: None = Depends(verify_cron_secret)):
+    """Refresh IPL 2026 squad and fixture data from CricAPI."""
     if not settings.CRICAPI_KEY:
         return {"status": "skipped", "reason": "CRICAPI_KEY not configured"}
 
@@ -50,16 +46,10 @@ async def refresh_squads(
 
 @router.post("/sync-results")
 async def sync_match_results(
-    x_cron_secret: str = Header(None, alias="X-Cron-Secret"),
+    _: None = Depends(verify_cron_secret),
     db: Session = Depends(get_db),
 ):
-    """Sync completed match results from CricAPI to database.
-
-    Called by Railway cron job (e.g., daily at 2 AM IST).
-    """
-    if settings.JWT_SECRET and x_cron_secret != settings.JWT_SECRET:
-        raise HTTPException(403, "Invalid cron secret")
-
+    """Sync completed match results from CricAPI to database."""
     if not settings.CRICAPI_KEY:
         return {"status": "skipped", "reason": "CRICAPI_KEY not configured"}
 
