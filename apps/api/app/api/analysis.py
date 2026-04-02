@@ -68,6 +68,19 @@ def _load_name_meta() -> dict:
     return mapping
 
 
+UNAVAILABLE_STATUSES = frozenset({"injured", "ruled_out"})
+
+
+def _name_to_id_map(squad_info: dict, squad_players: list[dict]) -> dict[str, int]:
+    """Map CricAPI full name (lowercase) -> DB player_id using aligned arrays."""
+    ids = squad_info.get("player_ids", [])
+    return {
+        p["name"].lower(): ids[i]
+        for i, p in enumerate(squad_players)
+        if i < len(ids)
+    }
+
+
 # -----------------------------------------------------------------------
 # Helper: phase strike rate / economy
 # -----------------------------------------------------------------------
@@ -562,7 +575,7 @@ def _build_team_analysis(
     opp_team_id: int,
     venue_id: int,
     name_meta: dict,
-    unavailable_player_ids: set | None = None,
+    unavailable_player_ids: set[int] | None = None,
 ) -> dict:
     squad_data = _load_squad_data()
     if team_short not in squad_data:
@@ -710,28 +723,18 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
     team1_news = fetch_player_news(team1.name, t1_player_names)
     team2_news = fetch_player_news(team2.name, t2_player_names)
 
-    # Build mapping: CricAPI full name (lowercase) -> DB player_id for each team
-    def _name_to_id_map(squad_info, squad_players):
-        """Zip aligned squad name list with DB player_ids."""
-        ids = squad_info.get("player_ids", [])
-        return {
-            p["name"].lower(): ids[i]
-            for i, p in enumerate(squad_players)
-            if i < len(ids)
-        }
-
     t1_name_id = _name_to_id_map(t1_info, t1_squad.get("players", []))
     t2_name_id = _name_to_id_map(t2_info, t2_squad.get("players", []))
 
     # Build set of unavailable player IDs (injured/ruled_out) per team
-    t1_unavailable_ids: set = set()
-    t2_unavailable_ids: set = set()
+    t1_unavailable_ids: set[int] = set()
+    t2_unavailable_ids: set[int] = set()
     for news, name_id, unavail in [
         (team1_news, t1_name_id, t1_unavailable_ids),
         (team2_news, t2_name_id, t2_unavailable_ids),
     ]:
         for update in news.get("player_updates", []):
-            if update.get("status") in ("injured", "ruled_out"):
+            if update.get("status") in UNAVAILABLE_STATUSES:
                 pid = name_id.get(update["name"].lower())
                 if pid is not None:
                     unavail.add(pid)
