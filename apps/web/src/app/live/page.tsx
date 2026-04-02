@@ -30,7 +30,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ---- Types ----
 
@@ -101,6 +101,7 @@ interface LiveMatch {
   prediction_details?: Record<string, unknown>;
   game_plan?: GamePlan;
   weather?: WeatherData;
+  history?: HistorySnapshot[];
 }
 
 interface HistorySnapshot {
@@ -562,6 +563,7 @@ export default function LivePage() {
     queryKey: ["live-scores"],
     queryFn: fetchLiveScores,
     refetchInterval: 30000,
+    refetchIntervalInBackground: true,
   });
 
   const scores = data as LiveScoresResponse | undefined;
@@ -569,6 +571,46 @@ export default function LivePage() {
   const upcoming = scores?.upcoming ?? [];
   const results = scores?.recent_results ?? [];
   const hasLive = liveMatches.length > 0;
+
+  // Accumulate win probability history client-side across polls
+  const historyRef = useRef<Record<string, HistorySnapshot[]>>({});
+  const seededRef = useRef<Record<string, boolean>>({});
+
+  useEffect(() => {
+    for (const match of liveMatches) {
+      if (!match.win_probability || !match.current_score) continue;
+      const id = match.match_id;
+      if (!historyRef.current[id]) historyRef.current[id] = [];
+
+      // Seed from server-side history on first load
+      const serverHistory = match.history;
+      if (serverHistory?.length && !seededRef.current[id]) {
+        seededRef.current[id] = true;
+        for (const snap of serverHistory) {
+          if (snap.win_probability && snap.current_score) {
+            const alreadyHas = historyRef.current[id].some(
+              (s) => s.current_score?.overs === snap.current_score?.overs
+            );
+            if (!alreadyHas) historyRef.current[id].push(snap);
+          }
+        }
+      }
+
+      const snapshots = historyRef.current[id];
+      const currentOver = match.current_score.overs;
+      const last = snapshots[snapshots.length - 1];
+      if (!last || (last.current_score && last.current_score.overs !== currentOver)) {
+        snapshots.push({
+          timestamp: new Date().toISOString(),
+          win_probability: match.win_probability,
+          current_score: match.current_score,
+          innings: match.innings,
+        });
+        // Cap at 60 snapshots to match server-side deque limit
+        if (snapshots.length > 60) snapshots.splice(0, snapshots.length - 60);
+      }
+    }
+  }, [liveMatches]);
 
   if (isLoading) return <LoadingSkeleton />;
 
@@ -616,7 +658,7 @@ export default function LivePage() {
               <LiveMatchCard match={match} />
               <GamePlanPanel match={match} />
               {match.weather && <WeatherPanel weather={match.weather} />}
-              <WinProbChart match={match} history={[]} />
+              <WinProbChart match={match} history={historyRef.current[match.match_id] ?? []} />
             </div>
           ))}
         </div>

@@ -21,6 +21,7 @@ from app.services.live_tracker import (
     predict_live_win_probability,
     poll_and_update,
     get_match_history,
+    record_snapshot,
     _extract_venue_city,
 )
 from app.services.weather import fetch_weather
@@ -52,6 +53,11 @@ async def get_live_scores():
     for m in matches:
         if m["match_state"] == "live":
             state = await build_live_match_state(m)
+            # Record snapshot only if score changed since last one
+            score = state.get("current_score")
+            prev = get_match_history(m["id"])
+            if score and (not prev or prev[-1].get("current_score") != score):
+                record_snapshot(m["id"], state)
             live_states.append(state)
         elif m["match_state"] == "fixture":
             upcoming.append({
@@ -70,6 +76,10 @@ async def get_live_scores():
                 "team2_score": m["team2_score"],
                 "status": m["status"],
             })
+
+    for state in live_states:
+        mid = state.get("match_id")
+        state["history"] = get_match_history(mid) if mid else []
 
     return {
         "live": live_states,

@@ -36,7 +36,7 @@ CRICAPI_KEY = None  # Set from config on init
 # Score cache — avoids hitting CricAPI on every user request
 _score_cache: list = []
 _score_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
-SCORE_CACHE_TTL = timedelta(seconds=30)
+SCORE_CACHE_TTL = timedelta(seconds=15)
 
 # ML model cache (loaded once from disk)
 _ml_models = None
@@ -377,6 +377,13 @@ async def build_live_match_state(match: dict, include_weather: bool = True) -> d
                 overs=t2["overs"], weather=weather, win_prob=win_prob,
             )
             result["game_plan"] = game_plan
+            return result
+        elif t1["overs"] == 0 and t2["overs"] == 0:
+            # Match just started, no balls bowled yet — treat as early 1st innings
+            result["innings"] = 1
+            result["batting_team"] = match["team1"]
+            result["bowling_team"] = match["team2"]
+            result["current_score"] = t1
             return result
         else:
             # Both have scores -- the one with more overs/wickets batted first
