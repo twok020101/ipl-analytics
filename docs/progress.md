@@ -3,6 +3,7 @@
 ## Session 1 (April 1, 2026)
 
 ### Phase 1: Foundation
+
 - Initialized Turborepo monorepo with `apps/web` (Next.js) and `apps/api` (Python FastAPI)
 - Ingested IPL.csv (278K ball-by-ball deliveries, 2008-2025) into normalized SQLite database
 - Created ORM models: Team, Player, Venue, Match, Delivery, PlayerSeasonBatting, PlayerSeasonBowling, BatterVsBowler, VenueStats
@@ -12,6 +13,7 @@
 - Set up shadcn/ui dark theme frontend with sidebar navigation
 
 ### Phase 2: IPL 2026 Live Data
+
 - Integrated CricAPI (cricketdata.org) for live IPL 2026 data
 - Fetched 70 fixtures, 10 team squads (256 players with roles/styles/country)
 - Ingested IPL 2026 data into database (matches, players, venues)
@@ -19,6 +21,7 @@
 - Fetched actual match scorecards for completed matches (scores, overs, toss data)
 
 ### Phase 3: Strategy Engine
+
 - Built comprehensive strategy engine (1,500+ lines):
   - **Playing 11 selection**: Composite scoring (career stats + venue + matchups + experience), constraints (max 4 overseas, 5 bowling options, 1+ WK, captain always plays)
   - **Toss recommendation**: Venue bat-first %, team records, dew factor analysis
@@ -30,6 +33,7 @@
 - **Result**: 10/11 correct playing 11 prediction for LSG vs DC
 
 ### Phase 4: Comprehensive Match Analysis
+
 - Single-endpoint analysis (`POST /analysis/match`) returning:
   - Win probability, H2H record, venue stats
   - Playing 11 for BOTH teams with role tags (WK/BAT/AR/BOWL)
@@ -42,6 +46,7 @@
 - Game plan shows both scenarios (Team A bats first / Team B bats first)
 
 ### Phase 5: NRR & Standings
+
 - Accurate NRR from ball-by-ball deliveries (actual overs faced, not assumed 20)
 - Cricket overs notation: 19.4 = 19 overs 4 balls = 19.667 decimal
 - Toss data determines batting order for correct team attribution
@@ -49,6 +54,7 @@
 - Verified NRR within 0.1 tolerance of official IPL standings
 
 ### Phase 6: Auth & Deployment
+
 - Custom JWT auth (no external dependency): Organization + User models, bcrypt, register/login/me
 - PostgreSQL support (dual SQLite/PostgreSQL based on DATABASE_URL)
 - Dockerfile for Railway, vercel.json for Vercel
@@ -58,6 +64,7 @@
 - Production domains: ipl-api.thetwok.in + ipl.thetwok.in
 
 ### Phase 7: Advanced ML Models (feature branch)
+
 - **In-match XGBoost models** trained on 278K deliveries:
   - 1st innings: 60.3% accuracy, 0.666 AUC-ROC
   - 2nd innings: 80.1% accuracy, 0.884 AUC-ROC (required rate = 39.4% feature importance)
@@ -70,6 +77,7 @@
 - **Code review cleanup**: Extracted shared utilities, cached ML models, bounded memory, centralized config
 
 ### Verified Against Real Match (DC vs LSG, April 1 2026)
+
 - DC won toss, chose to bowl → Our model predicted: **FIELD** (correct)
 - LSG 141 all out, DC chased 145/4 in 17.1 overs
 - Live prediction during chase: DC 75.5% at 84/4 after 11 overs (correct — DC won)
@@ -78,21 +86,70 @@
 
 ---
 
+## Session 2 (April 2, 2026)
+
+### Phase 8: Frontend Polish & Mobile Responsiveness
+
+- **Mobile sidebar**: Converted fixed sidebar to overlay drawer on mobile (lg breakpoint); added sticky mobile header with hamburger menu
+- **Responsive grids**: All pages now use mobile-first grids (1 col → 2 → 3/4 cols)
+- **Chart sizing**: Charts adapt to screen size (smaller heights on mobile)
+- **Standings table**: Added horizontal scroll on mobile with min-width constraint
+- **Dashboard**: Responsive banner, team logos, and fixture cards
+- **Player profile**: Career stats always visible (was hidden on non-lg screens), responsive header layout
+- **Bug fix**: Fixed duplicate "Matches" stat in venues page
+
+### Phase 9: New Chart Visualizations
+
+- **Scoring Distribution (Wagon Wheel)**: Donut chart showing balls faced by run type (dots, 1s, 2s, 3s, 4s, 6s) — stylized since no spatial data exists
+- **Dismissal Types (Pitch Map)**: Horizontal bar chart showing how a batter gets out (caught, bowled, lbw, etc.) with color coding
+- **Partnership Bars**: Horizontal bar chart showing batting partnerships with runs, balls, and strike rate per pair
+- **Backend**: New `/viz` API endpoints — `/viz/run-distribution/{id}`, `/viz/wicket-types/{id}`, `/viz/partnerships/{match_id}`
+- All charts integrated into player profile page
+
+### Phase 10: Player Comparison Tool
+
+- Added **"Compare Players"** tab to Head-to-Head page
+- Side-by-side comparison with:
+  - Spider charts for both players (Power, Consistency, SR, Form, Versatility, Experience)
+  - Batting stats comparison with green highlighting for the better stat
+  - Bowling stats comparison (if applicable)
+  - Form index and trend indicators
+- **Backend**: New `/viz/player-compare?player1=X&player2=Y` endpoint with full career aggregation
+
+### Phase 11: Cron Endpoints for CricAPI Refresh
+
+- Added `/cron/refresh-squads` — refreshes squad + fixture data from CricAPI (for Railway cron)
+- Added `/cron/sync-results` — syncs completed match results to database
+- Optionally secured via `X-Cron-Secret` header matching `JWT_SECRET`
+- Railway cron can call these on any schedule (e.g., daily at 2 AM IST)
+
+### Phase 12: V3 ML Model with Squad Composition Features
+
+- Created `features_v3.py` with 12 squad composition features per team (24 total):
+  - Batting: strength, SR, depth, power hitting
+  - Bowling: strength, economy, depth
+  - All-rounder factor, experience, star power (batter + bowler), squad size
+- **Total features**: 62 (38 V2 + 24 squad)
+- **V3 Test Accuracy**: 53.3% (up from V2's 48.0%, +5.3pp)
+- Squad features contribute **34.0%** of total feature importance
+- Top squad features: experience, batting SR, power hitting, star batter
+- Trained with XGBoost (600 estimators, early stopping @ 60 rounds)
+- Model saved as `win_probability_v3.joblib`
+
+---
+
 ## What's Next (Planned)
 
-### Immediate
-- [ ] Merge feature/advanced-ml-model PR to main
-- [ ] Deploy updated code to Railway + Vercel
-- [ ] Verify live dashboard works in production
-
 ### Short-term
-- [ ] Frontend polish: improve charts, mobile responsiveness
-- [ ] Add more graphical representations (wagon wheel, pitch map, partnership bars)
-- [ ] Player comparison tool (side-by-side stats)
-- [ ] Cron job for refreshing CricAPI squad data on new matches
-- [ ] Train ML model with player-level squad composition features
+
+- [x] Frontend polish: improve charts, mobile responsiveness
+- [x] Add more graphical representations (wagon wheel, pitch map, partnership bars)
+- [x] Player comparison tool (side-by-side stats)
+- [x] Cron job for refreshing CricAPI squad data on new matches
+- [x] Train ML model with player-level squad composition features
 
 ### Medium-term
+
 - [ ] Real-time score websocket (instead of 30s polling)
 - [ ] Post-match analysis with turning point identification
 - [ ] Season prediction (playoff qualifiers based on current standings)
@@ -100,6 +157,7 @@
 - [ ] Multi-team dashboard (each team sees only their analysis)
 
 ### Long-term
+
 - [ ] Historical match replay with win probability curve
 - [ ] Player auction valuation model
 - [ ] Fantasy team recommendation engine

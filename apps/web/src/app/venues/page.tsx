@@ -53,18 +53,10 @@ export default function VenuesPage() {
                       <MapPin className="h-5 w-5 text-primary" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="mt-4">
                     <div className="p-2.5 rounded-lg bg-gray-800/50 text-center">
-                      <p className="text-xs text-muted-foreground">Matches</p>
-                      <p className="text-lg font-bold">{venue.matches_played || 0}</p>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-gray-800/50 text-center">
-                      <p className="text-xs text-muted-foreground">Matches</p>
+                      <p className="text-xs text-muted-foreground">Matches Played</p>
                       <p className="text-lg font-bold text-primary">{venue.matches_played || 0}</p>
-                    </div>
-                    <div className="p-2.5 rounded-lg bg-gray-800/50 text-center">
-                      <p className="text-xs text-muted-foreground">City</p>
-                      <p className="text-sm font-bold text-amber-400">{venue.city || "-"}</p>
                     </div>
                   </div>
                 </CardContent>

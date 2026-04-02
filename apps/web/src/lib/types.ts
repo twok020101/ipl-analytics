@@ -260,3 +260,84 @@ export interface Squad {
   img: string;
   players: SquadPlayer[];
 }
+
+// Visualization types
+export interface Partnership {
+  batter1: { id: number; name: string };
+  batter2: { id: number; name: string };
+  runs: number;
+  balls: number;
+}
+
+export interface PartnershipData {
+  match_id: number;
+  innings: number;
+  partnerships: Partnership[];
+}
+
+export interface RunDistributionZone {
+  label: string;
+  value: number;
+  runs: number;
+  pct: number;
+}
+
+export interface RunDistributionData {
+  player_id: number;
+  player_name: string;
+  total_balls: number;
+  distribution: RunDistributionZone[];
+}
+
+export interface WicketType {
+  type: string;
+  count: number;
+  pct: number;
+}
+
+export interface WicketTypesData {
+  player_id: number;
+  player_name: string;
+  mode: string;
+  total: number;
+  wicket_types: WicketType[];
+}
+
+export interface PlayerCompareStats {
+  id: number;
+  name: string;
+  role: string | null;
+  batting_style: string | null;
+  bowling_style: string | null;
+  teams: { name: string; short_name: string }[];
+  batting: {
+    matches: number;
+    innings: number;
+    runs: number;
+    balls_faced: number;
+    strike_rate: number;
+    average: number;
+    fours: number;
+    sixes: number;
+    fifties: number;
+    hundreds: number;
+    highest_score: number;
+  };
+  bowling: {
+    innings: number;
+    wickets: number;
+    overs: number;
+    runs_conceded: number;
+    economy: number;
+    average: number;
+    four_wickets: number;
+    five_wickets: number;
+  };
+  form_index: number;
+  form_trend: string;
+}
+
+export interface PlayerCompareResult {
+  player1: PlayerCompareStats;
+  player2: PlayerCompareStats;
+}

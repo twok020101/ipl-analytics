@@ -66,18 +66,18 @@ export default function StandingsPage() {
               Failed to load standings. Ensure the API is running.
             </p>
           ) : (
-            <div className="rounded-lg border border-gray-800 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="rounded-lg border border-gray-800 overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="bg-gray-800/50 border-b border-gray-800">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground w-12">#</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Team</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">P</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">W</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">L</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">NR</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">Pts</th>
-                    <th className="px-4 py-3 text-center font-medium text-muted-foreground">NRR</th>
+                    <th className="px-3 sm:px-4 py-3 text-left font-medium text-muted-foreground w-10">#</th>
+                    <th className="px-3 sm:px-4 py-3 text-left font-medium text-muted-foreground">Team</th>
+                    <th className="px-2 sm:px-4 py-3 text-center font-medium text-muted-foreground">P</th>
+                    <th className="px-2 sm:px-4 py-3 text-center font-medium text-muted-foreground">W</th>
+                    <th className="px-2 sm:px-4 py-3 text-center font-medium text-muted-foreground">L</th>
+                    <th className="px-2 sm:px-4 py-3 text-center font-medium text-muted-foreground">NR</th>
+                    <th className="px-2 sm:px-4 py-3 text-center font-medium text-muted-foreground">Pts</th>
+                    <th className="px-2 sm:px-4 py-3 text-center font-medium text-muted-foreground">NRR</th>
                   </tr>
                 </thead>
                 <tbody>
