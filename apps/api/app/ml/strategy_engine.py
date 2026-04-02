@@ -407,6 +407,7 @@ def select_playing_11(
     opposition_short_name: str,
     venue_id: int,
     season: str = "2026",
+    unavailable_player_ids: set[int] | None = None,
 ) -> dict:
     """
     Selects optimal playing 11 + impact player from the 25-26 man squad.
@@ -565,6 +566,12 @@ def select_playing_11(
             "reasoning": "; ".join(reasoning_parts),
         })
 
+    # Filter out unavailable (injured / ruled out) players
+    excluded_names = []
+    if unavailable_player_ids:
+        excluded_names = [p["name"] for p in player_profiles if p["player_id"] in unavailable_player_ids]
+        player_profiles = [p for p in player_profiles if p["player_id"] not in unavailable_player_ids]
+
     # Sort by composite score descending
     player_profiles.sort(key=lambda x: x["score"], reverse=True)
 
@@ -722,6 +729,7 @@ def select_playing_11(
         "impact_player_batting": _clean_player(batting_impact) if batting_impact else None,
         "impact_player_bowling": _clean_player(bowling_impact) if bowling_impact else None,
         "squad_not_selected": not_selected,
+        "excluded_unavailable": excluded_names,
     }
 
 

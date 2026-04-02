@@ -68,6 +68,19 @@ def _load_name_meta() -> dict:
     return mapping
 
 
+UNAVAILABLE_STATUSES = frozenset({"injured", "ruled_out"})
+
+
+def _name_to_id_map(squad_info: dict, squad_players: list[dict]) -> dict[str, int]:
+    """Map CricAPI full name (lowercase) -> DB player_id using aligned arrays."""
+    ids = squad_info.get("player_ids", [])
+    return {
+        p["name"].lower(): ids[i]
+        for i, p in enumerate(squad_players)
+        if i < len(ids)
+    }
+
+
 # -----------------------------------------------------------------------
 # Helper: phase strike rate / economy
 # -----------------------------------------------------------------------
@@ -562,13 +575,14 @@ def _build_team_analysis(
     opp_team_id: int,
     venue_id: int,
     name_meta: dict,
+    unavailable_player_ids: set[int] | None = None,
 ) -> dict:
     squad_data = _load_squad_data()
     if team_short not in squad_data:
         return {"error": f"Team {team_short} not found"}
 
     # Get playing 11
-    xi_result = select_playing_11(db, team_short, opp_short, venue_id)
+    xi_result = select_playing_11(db, team_short, opp_short, venue_id, unavailable_player_ids=unavailable_player_ids)
     playing_11 = xi_result.get("playing_11", [])
     impact_bat = xi_result.get("impact_player_batting")
     impact_bowl = xi_result.get("impact_player_bowling")
@@ -696,6 +710,8 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
     ipl2026_path = DATA_DIR / "ipl2026.json"
     t1_player_names = []
     t2_player_names = []
+    t1_squad: dict = {}
+    t2_squad: dict = {}
     if ipl2026_path.exists():
         with open(ipl2026_path) as f:
             ipl_data = json.load(f)
@@ -707,12 +723,21 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
     team1_news = fetch_player_news(team1.name, t1_player_names)
     team2_news = fetch_player_news(team2.name, t2_player_names)
 
-    # Build set of unavailable players (injured/ruled_out) to exclude from playing 11
-    unavailable_players: set = set()
-    for news in [team1_news, team2_news]:
+    t1_name_id = _name_to_id_map(t1_info, t1_squad.get("players", []))
+    t2_name_id = _name_to_id_map(t2_info, t2_squad.get("players", []))
+
+    # Build set of unavailable player IDs (injured/ruled_out) per team
+    t1_unavailable_ids: set[int] = set()
+    t2_unavailable_ids: set[int] = set()
+    for news, name_id, unavail in [
+        (team1_news, t1_name_id, t1_unavailable_ids),
+        (team2_news, t2_name_id, t2_unavailable_ids),
+    ]:
         for update in news.get("player_updates", []):
-            if update.get("status") in ("injured", "ruled_out"):
-                unavailable_players.add(update["name"].lower())
+            if update.get("status") in UNAVAILABLE_STATUSES:
+                pid = name_id.get(update["name"].lower())
+                if pid is not None:
+                    unavail.add(pid)
 
     # --- Head to head ---
     h2h_raw = get_head_to_head(db, team1_id, team2_id)
@@ -752,8 +777,8 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
     }
 
     # --- Team analyses ---
-    team1_analysis = _build_team_analysis(db, req.team1, req.team2, team2_id, req.venue_id, name_meta)
-    team2_analysis = _build_team_analysis(db, req.team2, req.team1, team1_id, req.venue_id, name_meta)
+    team1_analysis = _build_team_analysis(db, req.team1, req.team2, team2_id, req.venue_id, name_meta, t1_unavailable_ids)
+    team2_analysis = _build_team_analysis(db, req.team2, req.team1, team1_id, req.venue_id, name_meta, t2_unavailable_ids)
 
     # --- Matchup matrix ---
     t1_batters = team1_analysis.get("top_batters", [])
