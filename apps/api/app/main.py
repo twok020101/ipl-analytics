@@ -24,6 +24,8 @@ from app.api.external import router as external_router
 from app.api.analysis import router as analysis_router
 from app.api.auth import router as auth_router
 from app.api.live import router as live_router
+from app.api.visualizations import router as viz_router
+from app.api.cron import router as cron_router
 
 DB_PATH = Path(__file__).resolve().parents[1] / "ipl_analytics.db"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://ipl.thetwok.in")
@@ -135,6 +137,8 @@ app.include_router(external_router, prefix="/api/v1")
 app.include_router(analysis_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(live_router, prefix="/api/v1")
+app.include_router(viz_router, prefix="/api/v1")
+app.include_router(cron_router, prefix="/api/v1")
 
 
 @app.get("/health")

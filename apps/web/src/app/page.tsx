@@ -73,12 +73,12 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* IPL 2026 Live Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-600/20 via-red-600/10 to-yellow-600/20 border border-gray-800 p-8 lg:p-10">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-600/20 via-red-600/10 to-yellow-600/20 border border-gray-800 p-5 sm:p-8 lg:p-10">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-amber-500/5 via-transparent to-transparent" />
         <div className="relative">
           <div className="flex items-center gap-3 mb-3">
             <Trophy className="h-8 w-8 text-amber-400" />
-            <h1 className="text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-amber-400 via-orange-400 to-red-400 bg-clip-text text-transparent">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold bg-gradient-to-r from-amber-400 via-orange-400 to-red-400 bg-clip-text text-transparent">
               IPL 2026 is Live
             </h1>
             {todayMatches.length > 0 && (
@@ -145,18 +145,18 @@ export default function DashboardPage() {
                         <Badge variant="outline" className="text-xs">Upcoming</Badge>
                       )}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         {fix.team1_img && (
-                          <img src={fix.team1_img} alt="" className="w-8 h-8 rounded object-contain bg-gray-800 p-0.5" />
+                          <img src={fix.team1_img} alt="" className="w-7 h-7 sm:w-8 sm:h-8 rounded object-contain bg-gray-800 p-0.5 shrink-0" />
                         )}
-                        <span className={cn("font-bold", getTeamTextColor(fix.team1))}>{fix.team1}</span>
+                        <span className={cn("font-bold text-sm sm:text-base truncate", getTeamTextColor(fix.team1))}>{fix.team1}</span>
                       </div>
-                      <span className="text-xs text-muted-foreground font-bold">vs</span>
-                      <div className="flex items-center gap-2">
-                        <span className={cn("font-bold", getTeamTextColor(fix.team2))}>{fix.team2}</span>
+                      <span className="text-xs text-muted-foreground font-bold shrink-0">vs</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={cn("font-bold text-sm sm:text-base truncate", getTeamTextColor(fix.team2))}>{fix.team2}</span>
                         {fix.team2_img && (
-                          <img src={fix.team2_img} alt="" className="w-8 h-8 rounded object-contain bg-gray-800 p-0.5" />
+                          <img src={fix.team2_img} alt="" className="w-7 h-7 sm:w-8 sm:h-8 rounded object-contain bg-gray-800 p-0.5 shrink-0" />
                         )}
                       </div>
                     </div>
@@ -273,16 +273,16 @@ export default function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {completed.slice(-4).reverse().map((fix) => (
-                <div key={fix.id} className="flex items-center justify-between p-4 rounded-lg bg-gray-800/50">
-                  <div className="flex items-center gap-3">
-                    {fix.team1_img && <img src={fix.team1_img} alt="" className="w-8 h-8 rounded object-contain bg-gray-800 p-0.5" />}
-                    <span className={cn("font-bold", getTeamTextColor(fix.team1))}>{fix.team1}</span>
-                    <span className="text-xs text-muted-foreground">vs</span>
-                    <span className={cn("font-bold", getTeamTextColor(fix.team2))}>{fix.team2}</span>
-                    {fix.team2_img && <img src={fix.team2_img} alt="" className="w-8 h-8 rounded object-contain bg-gray-800 p-0.5" />}
+                <div key={fix.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-4 rounded-lg bg-gray-800/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {fix.team1_img && <img src={fix.team1_img} alt="" className="w-7 h-7 rounded object-contain bg-gray-800 p-0.5 shrink-0" />}
+                    <span className={cn("font-bold text-sm truncate", getTeamTextColor(fix.team1))}>{fix.team1}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">vs</span>
+                    <span className={cn("font-bold text-sm truncate", getTeamTextColor(fix.team2))}>{fix.team2}</span>
+                    {fix.team2_img && <img src={fix.team2_img} alt="" className="w-7 h-7 rounded object-contain bg-gray-800 p-0.5 shrink-0" />}
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-amber-400">{fix.status}</p>
+                  <div className="text-left sm:text-right">
+                    <p className="text-xs font-medium text-amber-400 truncate">{fix.status}</p>
                     <p className="text-xs text-muted-foreground">{fix.date}</p>
                   </div>
                 </div>

@@ -22,13 +22,13 @@ export function SpiderChart({ data, color = "#3b82f6", name = "Stats" }: SpiderC
   }));
 
   return (
-    <div className="w-full h-[320px]">
+    <div className="w-full h-[260px] sm:h-[320px]">
       <ResponsiveContainer width="100%" height="100%">
-        <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
+        <RadarChart cx="50%" cy="50%" outerRadius="70%" data={chartData}>
           <PolarGrid stroke="#374151" />
           <PolarAngleAxis
             dataKey="axis"
-            tick={{ fill: "#9ca3af", fontSize: 12 }}
+            tick={{ fill: "#9ca3af", fontSize: 11 }}
           />
           <PolarRadiusAxis
             angle={30}

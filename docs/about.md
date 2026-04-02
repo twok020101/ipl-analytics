@@ -50,13 +50,15 @@ app/
 ├── models/models.py           # ORM: Team, Player, Venue, Match, Delivery, User, Org + enums
 ├── api/                       # REST endpoints
 │   ├── auth.py                # POST /register, /login, GET /me (JWT)
-│   ├── analysis.py            # POST /analysis/match (comprehensive single-call analysis)
+│   ├── analysis.py            # POST /analysis/match (comprehensive single-call, injury-aware)
 │   ├── live.py                # GET /live/scores, /match/{id}, POST /sync, /poll, /predict
 │   ├── strategy.py            # POST /playing-11, /toss-decision, /game-plan, /live-update, GET /rules
 │   ├── teams.py, players.py, venues.py, headtohead.py, predictions.py
 │   ├── season.py              # Standings with NRR (cricket overs notation)
 │   ├── dashboard.py           # Stats overview
 │   ├── external.py            # CricAPI proxy (fixtures, squads)
+│   ├── visualizations.py      # Partnerships, run distribution, wicket types, player compare
+│   ├── cron.py                # Railway cron endpoints (refresh squads, sync results)
 │   └── ai_insights.py         # Gemini AI chat, match preview, player report
 ├── services/
 │   ├── auth.py                # JWT creation/verification, bcrypt password hashing
@@ -70,12 +72,14 @@ app/
 │   ├── stats.py               # Aggregate stats (team, player, venue, H2H)
 │   └── form.py                # EWMA form index calculation
 ├── ml/
-│   ├── strategy_engine.py     # Playing 11 selection, toss, game plan, live update (1,500+ lines)
+│   ├── strategy_engine.py     # Playing 11 selection (injury-aware), toss, game plan, live update (1,500+ lines)
 │   ├── win_probability.py     # XGBoost pre-match model + heuristic fallback
 │   ├── features.py            # 11 basic match features
 │   ├── features_v2.py         # 38 advanced features (rolling stats, phase-wise, H2H)
+│   ├── features_v3.py         # 62 features (V2 + 24 squad composition features)
 │   ├── train.py               # Basic model training
-│   └── train_v2.py            # Advanced model training with time-based splits
+│   ├── train_v2.py            # Advanced model training with time-based splits
+│   └── train_v3.py            # V3 training with squad features + V2 comparison
 ├── ingestion/
 │   ├── load_csv.py            # IPL.csv → normalized relational tables
 │   ├── load_ipl2026.py        # CricAPI data → DB (fixtures, players, venues)
@@ -86,7 +90,8 @@ app/
 │   └── team_squads_2026.json  # Team → player_ids + captain_id mapping
 └── trained_models/
     ├── live_win_probability.joblib  # 1st + 2nd innings XGBoost models
-    └── win_probability_v2.joblib   # Advanced pre-match model (reference)
+    ├── win_probability_v2.joblib   # Advanced pre-match model (reference)
+    └── win_probability_v3.joblib   # V3: squad composition features (62 features)
 ```
 
 ### Frontend (apps/web/)
@@ -102,15 +107,15 @@ src/
 │   ├── teams/page.tsx         # Team listing
 │   ├── teams/[teamSlug]/      # Team profile with stats
 │   ├── players/page.tsx       # Player search/filter
-│   ├── players/[playerId]/    # Player profile with spider chart, form, stats
-│   ├── head-to-head/page.tsx  # Team vs team, player vs player
+│   ├── players/[playerId]/    # Player profile with spider chart, form, run dist, dismissals
+│   ├── head-to-head/page.tsx  # Team vs team, batter vs bowler, player compare (side-by-side)
 │   ├── venues/page.tsx        # Venue listing
 │   ├── venues/[venueId]/      # Venue intelligence
 │   ├── ai-insights/page.tsx   # Chat with Gemini AI
 │   ├── login/page.tsx         # JWT auth login/register
-│   └── layout.tsx             # Sidebar nav, auth gate, dark theme
+│   └── layout.tsx             # Sidebar nav (mobile drawer + desktop), auth gate, dark theme
 ├── components/
-│   ├── charts/                # WinProbGauge, SpiderChart, FormLineChart, RunRateBar, ManhattanChart
+│   ├── charts/                # WinProbGauge, SpiderChart, FormLineChart, RunRateBar, ManhattanChart, WagonWheel, PitchMap, PartnershipBars
 │   ├── cards/                 # StatCard, PlayerCard, MatchCard
 │   ├── tables/                # DataTable (sortable, filterable, paginated)
 │   └── ui/                    # shadcn/ui primitives
@@ -160,7 +165,8 @@ src/
 5. Scoring: career stats + venue performance + opposition matchups + recent form
 6. Experience multiplier: 0 IPL innings = 0.4x, 80+ innings = 1.15x
 7. Impact player options for both bat-first and bowl-first scenarios
-8. **Accuracy**: 10/11 correct against actual LSG playing 11 (DC vs LSG, Apr 1 2026)
+8. **Injury-aware**: Gemini AI fetches real-time player fitness; injured/ruled-out players are automatically excluded from selection
+9. **Accuracy**: 10/11 correct against actual LSG playing 11 (DC vs LSG, Apr 1 2026)
 
 ### Toss Recommendation
 - Venue bat-first win %, avg 1st vs 2nd innings scores
@@ -228,4 +234,6 @@ NEXT_PUBLIC_API_URL=https://ipl-api.thetwok.in/api/v1
 | Seasons | GET /seasons, /seasons/{season}/standings |
 | External | GET /fixtures, /fixtures/upcoming, /squads, /squads/{team}, POST /refresh |
 | AI | POST /ai/match-preview, /ai/player-report, /ai/chat |
+| Viz | GET /viz/partnerships/{match_id}, /viz/run-distribution/{id}, /viz/wicket-types/{id}, /viz/player-compare |
+| Cron | POST /cron/refresh-squads, /cron/sync-results |
 | Dashboard | GET /dashboard/stats |

@@ -53,16 +53,16 @@ export function WinProbGauge({ team1, team2, team1Prob, team2Prob }: WinProbGaug
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-center gap-8 mt-2">
+      <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mt-2">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color1 }} />
-          <span className="text-sm font-medium">{team1}</span>
-          <span className="text-sm text-muted-foreground">{team1Prob.toFixed(1)}%</span>
+          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color1 }} />
+          <span className="text-xs sm:text-sm font-medium">{team1}</span>
+          <span className="text-xs sm:text-sm text-muted-foreground">{team1Prob.toFixed(1)}%</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color2 }} />
-          <span className="text-sm font-medium">{team2}</span>
-          <span className="text-sm text-muted-foreground">{team2Prob.toFixed(1)}%</span>
+          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color2 }} />
+          <span className="text-xs sm:text-sm font-medium">{team2}</span>
+          <span className="text-xs sm:text-sm text-muted-foreground">{team2Prob.toFixed(1)}%</span>
         </div>
       </div>
     </div>

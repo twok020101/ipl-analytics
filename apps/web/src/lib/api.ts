@@ -157,3 +157,20 @@ export const fetchUpcomingFixtures = (limit = 5) =>
   fetchAPI<Fixture[]>(`/external/fixtures/upcoming?limit=${limit}`);
 export const fetchSquads = () => fetchAPI<Record<string, Squad>>("/external/squads");
 export const fetchSquad = (team: string) => fetchAPI<Squad>(`/external/squads/${team}`);
+
+// Visualizations
+import type { PartnershipData, RunDistributionData, WicketTypesData, PlayerCompareResult } from "./types";
+
+export const fetchPartnerships = (matchId: number, innings = 1) =>
+  fetchAPI<PartnershipData>(`/viz/partnerships/${matchId}?innings=${innings}`);
+export const fetchPlayerPartnerships = (playerId: number, limit = 10) =>
+  fetchAPI<PartnershipData>(`/viz/partnerships/player/${playerId}?limit=${limit}`);
+export const fetchRunDistribution = (playerId: number, season?: string) =>
+  fetchAPI<RunDistributionData>(`/viz/run-distribution/${playerId}${season ? `?season=${season}` : ""}`);
+export const fetchWicketTypes = (playerId: number, mode = "batter", season?: string) => {
+  const params = new URLSearchParams({ mode });
+  if (season) params.set("season", season);
+  return fetchAPI<WicketTypesData>(`/viz/wicket-types/${playerId}?${params}`);
+};
+export const fetchPlayerCompare = (player1: number, player2: number) =>
+  fetchAPI<PlayerCompareResult>(`/viz/player-compare?player1=${player1}&player2=${player2}`);

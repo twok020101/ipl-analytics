@@ -2,13 +2,16 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { fetchPlayer, fetchPlayerBatting, fetchPlayerBowling, fetchPlayerForm } from "@/lib/api";
+import { fetchPlayer, fetchPlayerBatting, fetchPlayerBowling, fetchPlayerForm, fetchRunDistribution, fetchWicketTypes, fetchPlayerPartnerships } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SpiderChart } from "@/components/charts/SpiderChart";
 import { FormLineChart } from "@/components/charts/FormLineChart";
+import { WagonWheel } from "@/components/charts/WagonWheel";
+import { PitchMap } from "@/components/charts/PitchMap";
+import { PartnershipBars } from "@/components/charts/PartnershipBars";
 import { DataTable } from "@/components/tables/DataTable";
 import { ArrowLeft, User, Award, TrendingUp } from "lucide-react";
 import Link from "next/link";
@@ -39,6 +42,24 @@ export default function PlayerDetailPage() {
   const { data: formData } = useQuery({
     queryKey: ["player-form", playerId],
     queryFn: () => fetchPlayerForm(playerId),
+    enabled: !!player,
+  });
+
+  const { data: runDist } = useQuery({
+    queryKey: ["run-distribution", playerId],
+    queryFn: () => fetchRunDistribution(playerId),
+    enabled: !!player,
+  });
+
+  const { data: wicketData } = useQuery({
+    queryKey: ["wicket-types", playerId],
+    queryFn: () => fetchWicketTypes(playerId, "batter"),
+    enabled: !!player,
+  });
+
+  const { data: partnershipData } = useQuery({
+    queryKey: ["player-partnerships", playerId],
+    queryFn: () => fetchPlayerPartnerships(playerId),
     enabled: !!player,
   });
 
@@ -124,37 +145,38 @@ export default function PlayerDetailPage() {
       </Link>
 
       {/* Player Header */}
-      <div className="rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-900 to-gray-900/50 p-8">
-        <div className="flex items-start gap-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10">
-            <User className="h-10 w-10 text-primary" />
+      <div className="rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-900 to-gray-900/50 p-5 sm:p-8">
+        <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+          <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-primary/10 shrink-0">
+            <User className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
           </div>
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold">{player.name}</h1>
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold truncate">{player.name}</h1>
+            <div className="flex items-center gap-2 sm:gap-3 mt-2 flex-wrap">
               {player.role && <Badge>{player.role}</Badge>}
               {player.batting_style && <Badge variant="outline">{player.batting_style}</Badge>}
               {player.bowling_style && <Badge variant="outline">{player.bowling_style}</Badge>}
             </div>
             {teamsStr && <p className="text-sm text-muted-foreground mt-2">{teamsStr}</p>}
           </div>
-          <div className="hidden lg:grid grid-cols-4 gap-4">
-            <div className="text-center p-3 rounded-xl bg-gray-800/50">
-              <p className="text-xs text-muted-foreground">Matches</p>
-              <p className="text-xl font-bold">{matches}</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-gray-800/50">
-              <p className="text-xs text-muted-foreground">Runs</p>
-              <p className="text-xl font-bold text-amber-400">{runs.toLocaleString()}</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-gray-800/50">
-              <p className="text-xs text-muted-foreground">Wickets</p>
-              <p className="text-xl font-bold text-green-400">{wickets}</p>
-            </div>
-            <div className="text-center p-3 rounded-xl bg-gray-800/50">
-              <p className="text-xs text-muted-foreground">SR</p>
-              <p className="text-xl font-bold text-primary">{sr.toFixed(1)}</p>
-            </div>
+        </div>
+        {/* Career stats — visible on all sizes */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+            <p className="text-xs text-muted-foreground">Matches</p>
+            <p className="text-xl font-bold">{matches}</p>
+          </div>
+          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+            <p className="text-xs text-muted-foreground">Runs</p>
+            <p className="text-xl font-bold text-amber-400">{runs.toLocaleString()}</p>
+          </div>
+          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+            <p className="text-xs text-muted-foreground">Wickets</p>
+            <p className="text-xl font-bold text-green-400">{wickets}</p>
+          </div>
+          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+            <p className="text-xs text-muted-foreground">SR</p>
+            <p className="text-xl font-bold text-primary">{sr.toFixed(1)}</p>
           </div>
         </div>
       </div>
@@ -201,6 +223,46 @@ export default function PlayerDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Run Distribution & Dismissal Types */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {runDist && runDist.distribution && runDist.total_balls > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Scoring Distribution</CardTitle>
+              <p className="text-xs text-muted-foreground">{runDist.total_balls} balls faced</p>
+            </CardHeader>
+            <CardContent>
+              <WagonWheel distribution={runDist.distribution} playerName={player.name} />
+            </CardContent>
+          </Card>
+        )}
+
+        {wicketData && wicketData.wicket_types && wicketData.total > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Dismissal Types</CardTitle>
+              <p className="text-xs text-muted-foreground">{wicketData.total} dismissals</p>
+            </CardHeader>
+            <CardContent>
+              <PitchMap wicketTypes={wicketData.wicket_types} mode="batter" />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Top Partnerships */}
+      {partnershipData && partnershipData.partnerships && partnershipData.partnerships.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Top Batting Partnerships</CardTitle>
+            <p className="text-xs text-muted-foreground">Aggregate runs across all IPL innings</p>
+          </CardHeader>
+          <CardContent>
+            <PartnershipBars partnerships={partnershipData.partnerships} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Tables */}
       <Tabs defaultValue="batting">

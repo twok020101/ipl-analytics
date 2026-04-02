@@ -49,15 +49,8 @@ def load_all_data(db: Session) -> dict:
     return {"matches": matches, "innings_stats": innings_stats}
 
 
-def build_feature_matrix(data: dict) -> tuple:
-    """Build feature matrix for all matches.
-
-    Returns (X, y, match_ids, feature_names) where X[i] corresponds to match_ids[i].
-    """
-    matches = data["matches"].copy()
-    innings = data["innings_stats"]
-
-    # Merge innings data onto matches
+def merge_innings_data(matches: pd.DataFrame, innings: pd.DataFrame) -> pd.DataFrame:
+    """Merge per-innings stats onto match rows."""
     inn1 = innings[innings["innings"] == 1].rename(
         columns={c: f"inn1_{c}" for c in innings.columns if c not in ("match_id", "innings")}
     )
@@ -66,9 +59,12 @@ def build_feature_matrix(data: dict) -> tuple:
     )
     matches = matches.merge(inn1.drop(columns=["innings"]), left_on="id", right_on="match_id", how="left")
     matches = matches.merge(inn2.drop(columns=["innings"]), left_on="id", right_on="match_id", how="left", suffixes=("", "_2"))
+    return matches
 
-    # Create team-match rows: for each match, record stats for both teams
-    team_match_records = []
+
+def build_team_match_records(matches: pd.DataFrame) -> pd.DataFrame:
+    """Build per-team-per-match records from merged match data."""
+    records = []
     for _, m in matches.iterrows():
         for team_col, opp_col, batting_first in [("team1_id", "team2_id", True), ("team2_id", "team1_id", False)]:
             team_id = m[team_col]
@@ -92,7 +88,7 @@ def build_feature_matrix(data: dict) -> tuple:
                 dots = m.get("inn2_dots")
                 opp_score = m.get("inn1_total_runs", m.get("first_innings_score"))
 
-            team_match_records.append({
+            records.append({
                 "match_id": m["id"],
                 "date": m["date"],
                 "team_id": team_id,
@@ -108,8 +104,19 @@ def build_feature_matrix(data: dict) -> tuple:
                 "sixes": s6,
                 "dots": dots,
             })
+    return pd.DataFrame(records)
 
-    tmr = pd.DataFrame(team_match_records)
+
+def build_feature_matrix(data: dict) -> tuple:
+    """Build feature matrix for all matches.
+
+    Returns (X, y, match_ids, feature_names) where X[i] corresponds to match_ids[i].
+    """
+    matches = data["matches"].copy()
+    innings = data["innings_stats"]
+
+    matches = merge_innings_data(matches, innings)
+    tmr = build_team_match_records(matches)
 
     # Now build rolling features for each match
     feature_rows = []
