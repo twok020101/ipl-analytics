@@ -27,7 +27,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   const token = typeof window !== "undefined" ? localStorage.getItem("ipl_token") : null;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(`${BASE_URL}${endpoint}`, { headers, ...options });
+  const res = await fetch(`${BASE_URL}${endpoint}`, { cache: "no-store", headers, ...options });
   if (res.status === 401) {
     if (typeof window !== "undefined") {
       localStorage.removeItem("ipl_token");
