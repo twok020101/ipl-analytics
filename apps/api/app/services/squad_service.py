@@ -62,8 +62,8 @@ def get_player_meta(db: Session, season: str = "2026") -> dict:
             p.name: {
                 "country": p.country or "India",
                 "role": p.role or "Unknown",
-                "battingStyle": p.batting_style or "",
-                "bowlingStyle": p.bowling_style or "",
+                "batting_style": p.batting_style or "",
+                "bowling_style": p.bowling_style or "",
             }
             for p in players
         }
@@ -79,8 +79,8 @@ def get_player_meta(db: Session, season: str = "2026") -> dict:
                 meta[p["name"]] = {
                     "country": p.get("country", "India"),
                     "role": p.get("role", "Unknown"),
-                    "battingStyle": p.get("battingStyle", ""),
-                    "bowlingStyle": p.get("bowlingStyle", ""),
+                    "batting_style": p.get("battingStyle", ""),
+                    "bowling_style": p.get("bowlingStyle", ""),
                 }
         return meta
     return {}

@@ -1,14 +1,16 @@
 """CricAPI integration for fetching live IPL data — writes to DB, not JSON."""
 
-import hashlib
 import httpx
 from datetime import date
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
 from app.models.models import Team, Player, Match, Venue, SquadMember
+from app.services.db_helpers import (
+    find_or_create_team, find_or_create_player, find_or_create_venue, stable_source_id,
+)
 
 CRICAPI_BASE = "https://api.cricapi.com/v1"
 IPL_2026_SERIES_ID = "87c62aac-bc3c-4738-ab93-19da0690488f"
@@ -68,83 +70,6 @@ async def fetch_player_info(player_id: str):
     return None
 
 
-# ---- DB Helpers ----
-
-def _find_or_create_team(db: Session, short_name: str, full_name: str) -> Team:
-    """Find team by short_name or create."""
-    team = db.query(Team).filter(Team.short_name == short_name).first()
-    if team:
-        return team
-    team = db.query(Team).filter(Team.name == full_name).first()
-    if team:
-        if not team.short_name:
-            team.short_name = short_name
-        return team
-    team = Team(name=full_name, short_name=short_name, is_active=True)
-    db.add(team)
-    db.flush()
-    return team
-
-
-def _find_or_create_player(db: Session, name: str, **kwargs) -> Player:
-    """Find player by name or create with metadata."""
-    player = db.query(Player).filter(Player.name == name).first()
-    if player:
-        # Enrich with missing fields
-        if kwargs.get("role") and not player.role:
-            player.role = kwargs["role"]
-        if kwargs.get("batting_style") and not player.batting_style:
-            player.batting_style = kwargs["batting_style"]
-        if kwargs.get("bowling_style") and not player.bowling_style:
-            player.bowling_style = kwargs["bowling_style"]
-        if kwargs.get("country") and not player.country:
-            player.country = kwargs["country"]
-        if kwargs.get("player_img") and not player.player_img:
-            player.player_img = kwargs["player_img"]
-        return player
-    player = Player(
-        name=name,
-        role=kwargs.get("role"),
-        batting_style=kwargs.get("batting_style"),
-        bowling_style=kwargs.get("bowling_style"),
-        country=kwargs.get("country"),
-        player_img=kwargs.get("player_img"),
-    )
-    db.add(player)
-    db.flush()
-    return player
-
-
-def _find_or_create_venue(db: Session, venue_str: str) -> Optional[Venue]:
-    """Find venue by name or create."""
-    if not venue_str:
-        return None
-    import re
-    venue = db.query(Venue).filter(Venue.name == venue_str).first()
-    if venue:
-        return venue
-    # Fuzzy match
-    all_venues = db.query(Venue).all()
-    for v in all_venues:
-        v_lower = v.name.lower()
-        new_lower = venue_str.lower()
-        if v_lower in new_lower or new_lower in v_lower:
-            return v
-        v_words = set(re.findall(r'\b\w{5,}\b', v_lower))
-        new_words = set(re.findall(r'\b\w{5,}\b', new_lower))
-        if v_words & new_words and len(v_words & new_words) >= 1:
-            return v
-    parts = venue_str.rsplit(", ", 1)
-    city = parts[-1] if len(parts) > 1 else None
-    venue = Venue(name=venue_str, city=city)
-    db.add(venue)
-    db.flush()
-    return venue
-
-
-def _stable_source_id(cricapi_uuid: str) -> int:
-    """Deterministic integer ID from CricAPI UUID (for source_match_id column)."""
-    return int(hashlib.sha256(cricapi_uuid.encode()).hexdigest()[:7], 16) + 2000000
 
 
 # ---- Main Refresh Function ----
@@ -187,12 +112,12 @@ async def refresh_ipl2026_data(db: Session) -> dict:
 
     # 1. Upsert teams and players, create squad memberships
     for short_name, squad in all_squads.items():
-        team = _find_or_create_team(db, short_name, squad['name'])
+        team = find_or_create_team(db, short_name, squad['name'])
         if squad.get('img'):
             team.img = squad['img']
 
         for p_data in squad.get('players', []):
-            player = _find_or_create_player(
+            player = find_or_create_player(
                 db,
                 p_data['name'],
                 role=p_data.get('role'),
@@ -236,7 +161,7 @@ async def refresh_ipl2026_data(db: Session) -> dict:
 
         team1 = db.query(Team).filter(Team.short_name == t1_short).first() if t1_short else None
         team2 = db.query(Team).filter(Team.short_name == t2_short).first() if t2_short else None
-        venue = _find_or_create_venue(db, m.get('venue'))
+        venue = find_or_create_venue(db, m.get('venue'))
 
         # Parse date
         match_date = None
@@ -256,7 +181,7 @@ async def refresh_ipl2026_data(db: Session) -> dict:
             if venue:
                 db_match.venue_id = venue.id
         else:
-            source_id = _stable_source_id(cricapi_uuid)
+            source_id = stable_source_id(cricapi_uuid)
             # Check for source_match_id collision
             existing_by_source = db.query(Match).filter(Match.source_match_id == source_id).first()
             if existing_by_source:
@@ -314,16 +239,16 @@ async def refresh_ipl2026_data(db: Session) -> dict:
 
 # ---- Read Functions (DB-first, no JSON fallback) ----
 
-def _match_to_fixture_dict(m: Match, db: Session) -> dict:
-    """Convert a Match ORM object to the fixture dict shape the frontend expects."""
-    t1 = db.query(Team).get(m.team1_id) if m.team1_id else None
-    t2 = db.query(Team).get(m.team2_id) if m.team2_id else None
+def _match_to_fixture_dict(m: Match) -> dict:
+    """Convert a Match ORM object (with eager-loaded relationships) to fixture dict."""
+    t1 = m.team1
+    t2 = m.team2
     return {
         'id': m.cricapi_id or str(m.source_match_id),
         'name': f"{t1.short_name if t1 else '?'} vs {t2.short_name if t2 else '?'}",
         'date': str(m.date) if m.date else None,
         'dateTimeGMT': m.datetime_gmt,
-        'venue': db.query(Venue.name).filter(Venue.id == m.venue_id).scalar() if m.venue_id else None,
+        'venue': m.venue.name if m.venue else None,
         'team1': t1.short_name if t1 else None,
         'team2': t2.short_name if t2 else None,
         'team1_img': t1.img if t1 else None,
@@ -336,8 +261,14 @@ def _match_to_fixture_dict(m: Match, db: Session) -> dict:
 
 def get_fixtures(db: Session) -> list:
     """Get IPL 2026 fixtures from DB."""
-    matches = db.query(Match).filter(Match.season == "2026").order_by(Match.date).all()
-    return [_match_to_fixture_dict(m, db) for m in matches]
+    matches = (
+        db.query(Match)
+        .filter(Match.season == "2026")
+        .options(joinedload(Match.team1), joinedload(Match.team2), joinedload(Match.venue))
+        .order_by(Match.date)
+        .all()
+    )
+    return [_match_to_fixture_dict(m) for m in matches]
 
 
 def get_squads(db: Session) -> dict:
@@ -390,11 +321,12 @@ def get_upcoming_fixtures(db: Session, limit: int = 5) -> list:
             Match.date >= today,
             Match.match_ended == False,
         )
+        .options(joinedload(Match.team1), joinedload(Match.team2), joinedload(Match.venue))
         .order_by(Match.date)
         .limit(limit)
         .all()
     )
-    return [_match_to_fixture_dict(m, db) for m in matches]
+    return [_match_to_fixture_dict(m) for m in matches]
 
 
 def get_cached_data(db: Session) -> Optional[dict]:

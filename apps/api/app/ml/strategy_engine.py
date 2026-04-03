@@ -100,18 +100,8 @@ def _load_squad_data(db: Session) -> dict:
 
 
 def _build_name_to_meta(db: Session) -> Dict[str, dict]:
-    """Build player name -> {country, role, ...} from DB."""
-    meta = get_player_meta(db)
-    # Normalize key names to match existing consumers
-    return {
-        name: {
-            "country": info.get("country", "India"),
-            "role": info.get("role", "Unknown"),
-            "batting_style": info.get("battingStyle", ""),
-            "bowling_style": info.get("bowlingStyle", ""),
-        }
-        for name, info in meta.items()
-    }
+    """Build player name -> {country, role, batting_style, bowling_style} from DB."""
+    return get_player_meta(db)
 
 
 def _is_overseas(country: str) -> bool:

@@ -18,6 +18,7 @@ from app.services.squad_service import get_squad_data, get_player_meta, get_squa
 from app.models.models import (
     Team,
     Player,
+    SquadMember,
     Match,
     Delivery,
     PlayerSeasonBatting,
@@ -44,20 +45,11 @@ class MatchAnalysisRequest(BaseModel):
     venue_id: int
 
 
-def _load_squad_data(db: Session) -> dict:
-    return get_squad_data(db)
-
-
-def _load_name_meta(db: Session) -> dict:
-    return get_player_meta(db)
-
-
 UNAVAILABLE_STATUSES = frozenset({"injured", "ruled_out"})
 
 
 def _name_to_id_map(db: Session, team_short: str) -> dict[str, int]:
     """Map player name (lowercase) -> DB player_id from squad_members."""
-    from app.models.models import SquadMember
     members = (
         db.query(SquadMember)
         .join(Player, SquadMember.player_id == Player.id)
@@ -564,7 +556,7 @@ def _build_team_analysis(
     name_meta: dict,
     unavailable_player_ids: set[int] | None = None,
 ) -> dict:
-    squad_data = _load_squad_data(db)
+    squad_data = get_squad_data(db)
     if team_short not in squad_data:
         return {"error": f"Team {team_short} not found"}
 
@@ -673,8 +665,8 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
     Returns everything the frontend needs: head-to-head, team analyses,
     matchup matrix, venue analysis, toss recommendation, and win prediction.
     """
-    squad_data = _load_squad_data(db)
-    name_meta = _load_name_meta(db)
+    squad_data = get_squad_data(db)
+    name_meta = get_player_meta(db)
 
     # Resolve teams
     t1_info = squad_data.get(req.team1)

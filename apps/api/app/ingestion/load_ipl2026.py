@@ -10,9 +10,7 @@ Adds:
 Run: python -m app.ingestion.load_ipl2026
 """
 
-import hashlib
 import json
-import re
 from datetime import date
 from pathlib import Path
 
@@ -21,6 +19,9 @@ from sqlalchemy.orm import Session
 from app.database import engine, Base, SessionLocal
 from app.models.models import Team, Player, Venue, Match, VenueStats, SquadMember
 from app.ingestion.team_mappings import TEAM_NAME_MAP, TEAM_SHORT_NAMES
+from app.services.db_helpers import (
+    find_or_create_team, find_or_create_player, find_or_create_venue, stable_source_id,
+)
 
 
 DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "ipl2026.json"
@@ -29,85 +30,6 @@ DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "ipl2026.json"
 def _normalize_team(name: str) -> str:
     """Map CricAPI team names to our canonical names."""
     return TEAM_NAME_MAP.get(name, name)
-
-
-def _find_or_create_team(db: Session, short_name: str, full_name: str) -> Team:
-    """Find team by short_name or create."""
-    team = db.query(Team).filter(Team.short_name == short_name).first()
-    if team:
-        return team
-    canonical = _normalize_team(full_name)
-    team = db.query(Team).filter(Team.name == canonical).first()
-    if team:
-        if not team.short_name:
-            team.short_name = short_name
-        return team
-    team = Team(name=canonical, short_name=short_name, is_active=True)
-    db.add(team)
-    db.flush()
-    return team
-
-
-def _find_or_create_venue(db: Session, venue_str: str) -> Venue:
-    """Find venue by name or create. Handles slight name variations."""
-    if not venue_str:
-        return None
-    venue = db.query(Venue).filter(Venue.name == venue_str).first()
-    if venue:
-        return venue
-    parts = venue_str.rsplit(", ", 1)
-    city = parts[-1] if len(parts) > 1 else None
-    all_venues = db.query(Venue).all()
-    for v in all_venues:
-        v_lower = v.name.lower()
-        new_lower = venue_str.lower()
-        if v_lower in new_lower or new_lower in v_lower:
-            return v
-        v_words = set(re.findall(r'\b\w{5,}\b', v_lower))
-        new_words = set(re.findall(r'\b\w{5,}\b', new_lower))
-        if v_words & new_words and len(v_words & new_words) >= 1:
-            return v
-    venue = Venue(name=venue_str, city=city)
-    db.add(venue)
-    db.flush()
-    return venue
-
-
-def _find_or_create_player(db: Session, player_data: dict) -> Player:
-    """Find player by name or create with CricAPI metadata."""
-    name = player_data["name"]
-    player = db.query(Player).filter(Player.name == name).first()
-
-    role = player_data.get("role")
-    batting_style = player_data.get("battingStyle")
-    bowling_style = player_data.get("bowlingStyle")
-    country = player_data.get("country")
-    player_img = player_data.get("playerImg")
-
-    if player:
-        if not player.role and role:
-            player.role = role
-        if not player.batting_style and batting_style:
-            player.batting_style = batting_style
-        if not player.bowling_style and bowling_style:
-            player.bowling_style = bowling_style
-        if not player.country and country:
-            player.country = country
-        if not player.player_img and player_img:
-            player.player_img = player_img
-        return player
-
-    player = Player(
-        name=name,
-        role=role,
-        batting_style=batting_style,
-        bowling_style=bowling_style,
-        country=country,
-        player_img=player_img,
-    )
-    db.add(player)
-    db.flush()
-    return player
 
 
 def _parse_result(status: str):
@@ -154,7 +76,7 @@ def run_ingestion():
         squad_members_added = 0
 
         for short_name, squad in squads.items():
-            team = _find_or_create_team(db, short_name, squad["name"])
+            team = find_or_create_team(db, short_name, _normalize_team(squad["name"]))
             team.is_active = True
             if squad.get("img") and not team.img:
                 team.img = squad["img"]
@@ -162,7 +84,14 @@ def run_ingestion():
             for p_data in squad.get("players", []):
                 existing = db.query(Player).filter(Player.name == p_data["name"]).first()
                 was_new = existing is None
-                player = _find_or_create_player(db, p_data)
+                player = find_or_create_player(
+                    db, p_data["name"],
+                    role=p_data.get("role"),
+                    batting_style=p_data.get("battingStyle"),
+                    bowling_style=p_data.get("bowlingStyle"),
+                    country=p_data.get("country"),
+                    player_img=p_data.get("playerImg"),
+                )
                 if was_new:
                     players_added += 1
                 elif existing and (not existing.role or not existing.batting_style):
@@ -193,25 +122,30 @@ def run_ingestion():
         matches_added = 0
         matches_updated = 0
 
+        # Pre-load teams to avoid N+1 queries
+        all_teams = {t.short_name: t for t in db.query(Team).all()}
+        all_teams_by_name = {t.name.lower(): t for t in all_teams.values()}
+
         for fix in fixtures:
             cricapi_uuid = fix["id"]
 
             # Look up by cricapi_id first (reliable)
             existing = db.query(Match).filter(Match.cricapi_id == cricapi_uuid).first()
             if not existing:
-                source_id = int(hashlib.sha256(cricapi_uuid.encode()).hexdigest()[:7], 16) + 2000000
+                source_id = stable_source_id(cricapi_uuid)
                 existing = db.query(Match).filter(Match.source_match_id == source_id).first()
             else:
                 source_id = existing.source_match_id
 
-            team1 = db.query(Team).filter(Team.short_name == fix.get("team1")).first() if fix.get("team1") else None
-            team2 = db.query(Team).filter(Team.short_name == fix.get("team2")).first() if fix.get("team2") else None
-            venue = _find_or_create_venue(db, fix.get("venue"))
+            team1 = all_teams.get(fix.get("team1"))
+            team2 = all_teams.get(fix.get("team2"))
+            venue = find_or_create_venue(db, fix.get("venue"))
 
             winner_name, win_margin, win_type = _parse_result(fix.get("status", ""))
             winner = None
             if winner_name:
-                winner = db.query(Team).filter(Team.name.ilike(f"%{winner_name}%")).first()
+                wn_lower = winner_name.lower()
+                winner = next((t for t in all_teams.values() if wn_lower in t.name.lower()), None)
                 if not winner and team1 and winner_name in (team1.name, fix.get("team1_name", "")):
                     winner = team1
                 elif not winner and team2 and winner_name in (team2.name, fix.get("team2_name", "")):
@@ -238,7 +172,7 @@ def run_ingestion():
                     existing.win_type = win_type
                     matches_updated += 1
             else:
-                source_id = int(hashlib.sha256(cricapi_uuid.encode()).hexdigest()[:7], 16) + 2000000
+                source_id = stable_source_id(cricapi_uuid)
                 m = Match(
                     source_match_id=source_id,
                     cricapi_id=cricapi_uuid,

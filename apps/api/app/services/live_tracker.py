@@ -38,6 +38,11 @@ _score_cache: list = []
 _score_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
 SCORE_CACHE_TTL = timedelta(seconds=15)
 
+# Match window cache — avoids opening a DB session on every poll
+_match_window_cache: bool = True
+_match_window_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
+_MATCH_WINDOW_TTL = timedelta(seconds=60)
+
 # ML model cache (loaded once from disk)
 _ml_models = None
 
@@ -64,9 +69,14 @@ def init_tracker(api_key: str):
 def _is_match_window() -> bool:
     """Check if any IPL match could be live right now.
 
-    IPL matches start at 15:30 IST (10:00 UTC) or 19:30 IST (14:00 UTC)
-    and last ~4 hours. Only poll CricAPI during these windows.
+    Cached for 60 seconds to avoid opening a DB session on every poll.
     """
+    global _match_window_cache, _match_window_cache_time
+
+    now = datetime.now(timezone.utc)
+    if (now - _match_window_cache_time) < _MATCH_WINDOW_TTL:
+        return _match_window_cache
+
     from app.database import SessionLocal
     from app.models.models import Match
 
@@ -82,9 +92,11 @@ def _is_match_window() -> bool:
             db.close()
 
         if not matches:
-            return True  # no data, assume yes
+            _match_window_cache = True
+            _match_window_cache_time = now
+            return True
 
-        now = datetime.now(timezone.utc)
+        result = False
         for m in matches:
             try:
                 start = datetime.fromisoformat(m.datetime_gmt.replace("Z", "+00:00"))
@@ -96,9 +108,12 @@ def _is_match_window() -> bool:
             window_start = start - timedelta(minutes=30)
             window_end = start + timedelta(hours=5)
             if window_start <= now <= window_end:
-                return True
+                result = True
+                break
 
-        return False
+        _match_window_cache = result
+        _match_window_cache_time = now
+        return result
     except Exception:
         return True  # on error, allow polling
 
