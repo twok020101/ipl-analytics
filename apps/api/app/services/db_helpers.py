@@ -53,24 +53,38 @@ def find_or_create_player(db: Session, name: str, **kwargs) -> Player:
     return player
 
 
+_GENERIC_VENUE_WORDS = {"stadium", "cricket", "international", "sports", "ground", "academy"}
+
+
 def find_or_create_venue(db: Session, venue_str: str) -> Optional[Venue]:
-    """Find venue by name (exact or fuzzy) or create."""
+    """Find venue by name (exact, substring, or city match) or create."""
     if not venue_str:
         return None
     venue = db.query(Venue).filter(Venue.name == venue_str).first()
     if venue:
         return venue
+
+    # Extract city from "Stadium Name, City"
+    parts = venue_str.rsplit(", ", 1)
+    new_city = parts[-1].strip().lower() if len(parts) > 1 else None
+
     all_venues = db.query(Venue).all()
     for v in all_venues:
         v_lower = v.name.lower()
         new_lower = venue_str.lower()
+        # Exact substring match (one name fully contained in the other)
         if v_lower in new_lower or new_lower in v_lower:
             return v
-        v_words = set(re.findall(r'\b\w{5,}\b', v_lower))
-        new_words = set(re.findall(r'\b\w{5,}\b', new_lower))
-        if v_words & new_words:
+        # Significant word overlap (exclude generic words like "Stadium", "Cricket")
+        v_words = set(re.findall(r'\b\w{5,}\b', v_lower)) - _GENERIC_VENUE_WORDS
+        new_words = set(re.findall(r'\b\w{5,}\b', new_lower)) - _GENERIC_VENUE_WORDS
+        overlap = v_words & new_words
+        if len(overlap) >= 2:
             return v
-    parts = venue_str.rsplit(", ", 1)
+        # Single distinctive word match + same city
+        if overlap and new_city and v.city and v.city.lower() == new_city:
+            return v
+
     city = parts[-1] if len(parts) > 1 else None
     venue = Venue(name=venue_str, city=city)
     db.add(venue)
