@@ -33,11 +33,64 @@ DB_PATH = Path(__file__).resolve().parents[1] / "ipl_analytics.db"
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://ipl.thetwok.in")
 
 
+def _run_schema_migrations():
+    """Add new columns to existing tables for DBs created before this version."""
+    from sqlalchemy import inspect as sa_inspect, text
+    inspector = sa_inspect(engine)
+    dialect = engine.dialect.name
+    is_pg = dialect == "postgresql"
+
+    def _get_cols(table):
+        try:
+            return {c["name"] for c in inspector.get_columns(table)}
+        except Exception:
+            return set()
+
+    match_cols = _get_cols("matches")
+    player_cols = _get_cols("players")
+    team_cols = _get_cols("teams")
+
+    stmts = []
+
+    # matches
+    if match_cols:
+        if "cricapi_id" not in match_cols:
+            stmts.append("ALTER TABLE matches ADD COLUMN cricapi_id VARCHAR(50) UNIQUE" if is_pg
+                         else "ALTER TABLE matches ADD COLUMN cricapi_id TEXT UNIQUE")
+        if "datetime_gmt" not in match_cols:
+            stmts.append("ALTER TABLE matches ADD COLUMN datetime_gmt VARCHAR(50)")
+        if "match_started" not in match_cols:
+            stmts.append("ALTER TABLE matches ADD COLUMN match_started BOOLEAN DEFAULT FALSE")
+        if "match_ended" not in match_cols:
+            stmts.append("ALTER TABLE matches ADD COLUMN match_ended BOOLEAN DEFAULT FALSE")
+        if "status_text" not in match_cols:
+            stmts.append("ALTER TABLE matches ADD COLUMN status_text VARCHAR(300)")
+
+    # players
+    if player_cols:
+        if "country" not in player_cols:
+            stmts.append("ALTER TABLE players ADD COLUMN country VARCHAR(100)")
+        if "player_img" not in player_cols:
+            stmts.append("ALTER TABLE players ADD COLUMN player_img VARCHAR(500)")
+
+    # teams
+    if team_cols:
+        if "img" not in team_cols:
+            stmts.append("ALTER TABLE teams ADD COLUMN img VARCHAR(500)")
+
+    if stmts:
+        with engine.begin() as conn:
+            for s in stmts:
+                conn.execute(text(s))
+        print(f"Schema migrations: {len(stmts)} columns added")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: ensure DB exists, run ingestion if needed."""
     if settings.DATABASE_URL.startswith("postgresql"):
         Base.metadata.create_all(engine)
+        _run_schema_migrations()
         print("PostgreSQL database ready.")
     elif not DB_PATH.exists():
         print("Database not found. Running initial data ingestion ...")
@@ -48,6 +101,7 @@ async def lifespan(app: FastAPI):
     else:
         # Ensure tables exist
         Base.metadata.create_all(engine)
+        _run_schema_migrations()
         print(f"Database loaded from {DB_PATH}")
 
     # Start background match sync task (every 5 minutes)
@@ -154,9 +208,12 @@ app.include_router(cron_router, prefix="/api/v1")
 @app.get("/health")
 def health_check():
     """Health check endpoint."""
-    db_exists = DB_PATH.exists()
+    if settings.DATABASE_URL.startswith("postgresql"):
+        db_status = "connected"
+    else:
+        db_status = "connected" if DB_PATH.exists() else "missing"
     return {
         "status": "healthy",
-        "database": "connected" if db_exists else "missing",
+        "database": db_status,
         "version": "1.0.0",
     }

@@ -24,7 +24,7 @@ from typing import Optional
 import joblib
 import numpy as np
 
-from app.config import DATA_DIR, MODEL_DIR
+from app.config import MODEL_DIR
 from app.services.cricapi_utils import parse_score, extract_team_short
 from app.services.weather import fetch_weather, VENUE_COORDS
 from app.services.game_plan_live import recalculate_game_plan
@@ -67,30 +67,32 @@ def _is_match_window() -> bool:
     IPL matches start at 15:30 IST (10:00 UTC) or 19:30 IST (14:00 UTC)
     and last ~4 hours. Only poll CricAPI during these windows.
     """
-    import json
-    try:
-        cache_path = DATA_DIR / "ipl2026.json"
-        if not cache_path.exists():
-            return True  # can't check, assume yes
+    from app.database import SessionLocal
+    from app.models.models import Match
 
-        with open(cache_path) as f:
-            data = json.load(f)
+    try:
+        db = SessionLocal()
+        try:
+            matches = db.query(Match).filter(
+                Match.season == "2026",
+                Match.match_ended == False,
+                Match.datetime_gmt.isnot(None),
+            ).all()
+        finally:
+            db.close()
+
+        if not matches:
+            return True  # no data, assume yes
 
         now = datetime.now(timezone.utc)
-        for fix in data.get("fixtures", []):
-            if fix.get("matchEnded"):
-                continue
-            match_time = fix.get("dateTimeGMT", "")
-            if not match_time:
-                continue
+        for m in matches:
             try:
-                start = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
+                start = datetime.fromisoformat(m.datetime_gmt.replace("Z", "+00:00"))
                 if not start.tzinfo:
                     start = start.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 continue
 
-            # Window: 30 min before start to 5 hours after start
             window_start = start - timedelta(minutes=30)
             window_end = start + timedelta(hours=5)
             if window_start <= now <= window_end:
