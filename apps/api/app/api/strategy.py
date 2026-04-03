@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_analyst
+from app.config import CURRENT_SEASON
+from app.models.models import User
 from app.ml.strategy_engine import (
     select_playing_11,
     recommend_toss_decision,
@@ -25,7 +27,7 @@ class Playing11Request(BaseModel):
     team: str
     opposition: str
     venue_id: int
-    season: str = "2026"
+    season: str = CURRENT_SEASON
     unavailable_player_ids: list[int] = []
 
 
@@ -111,7 +113,7 @@ def get_ipl_rules():
 
 
 @router.post("/playing-11")
-def get_playing_11(req: Playing11Request, db: Session = Depends(get_db)):
+def get_playing_11(req: Playing11Request, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Select optimal playing 11 + impact player from the squad."""
     try:
         result = select_playing_11(
@@ -132,7 +134,7 @@ def get_playing_11(req: Playing11Request, db: Session = Depends(get_db)):
 
 
 @router.post("/toss-decision")
-def get_toss_decision(req: TossDecisionRequest, db: Session = Depends(get_db)):
+def get_toss_decision(req: TossDecisionRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Get bat/field recommendation with reasoning."""
     try:
         result = recommend_toss_decision(
@@ -147,7 +149,7 @@ def get_toss_decision(req: TossDecisionRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/game-plan")
-def get_game_plan(req: GamePlanRequest, db: Session = Depends(get_db)):
+def get_game_plan(req: GamePlanRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Get full game plan: batting order + bowling plan + matchups."""
     if len(req.playing_11) != 11:
         raise HTTPException(status_code=400, detail="playing_11 must contain exactly 11 player IDs")
@@ -169,7 +171,7 @@ def get_game_plan(req: GamePlanRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/live-update")
-def get_live_update(req: LiveUpdateRequest, db: Session = Depends(get_db)):
+def get_live_update(req: LiveUpdateRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Get adjusted strategy based on current match situation."""
     if req.wickets < 0 or req.wickets > 10:
         raise HTTPException(status_code=400, detail="wickets must be between 0 and 10")

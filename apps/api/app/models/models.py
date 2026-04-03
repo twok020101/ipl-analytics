@@ -82,13 +82,21 @@ class WicketKind(str, enum.Enum):
 # --- Auth Models ---
 
 class Organization(Base):
+    """B2B organization (e.g., an IPL franchise's analytics department).
+
+    team_id links the org to the IPL team they manage, enabling scoped
+    dashboards where each org only sees their own team's analysis.
+    Admins without a team_id (or super-admins) can view all teams.
+    """
     __tablename__ = "organizations"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(200), nullable=False)
     slug = Column(String(50), unique=True, nullable=False)
     plan = Column(Enum(OrgPlan), default=OrgPlan.free, nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # Linked IPL team
     created_at = Column(DateTime, server_default=func.now())
     users = relationship("User", back_populates="organization")
+    team = relationship("Team", foreign_keys=[team_id])
 
 
 class User(Base):
@@ -332,3 +340,32 @@ class VenueStats(Base):
     lowest_score = Column(Integer, default=0)
 
     venue = relationship("Venue", back_populates="stats")
+
+
+class LiveSnapshot(Base):
+    """Persisted score snapshot captured during live polling.
+
+    Stores over-by-over match state for post-match analysis and win-probability
+    curve reconstruction on IPL 2026 matches (which lack ball-by-ball data).
+    """
+    __tablename__ = "live_snapshots"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, index=True)
+    cricapi_match_id = Column(String(50), nullable=True)
+    timestamp = Column(DateTime, nullable=False)
+    innings = Column(Integer, nullable=False)          # 1 or 2
+    batting_team = Column(String(10), nullable=True)   # short_name
+    bowling_team = Column(String(10), nullable=True)   # short_name
+    runs = Column(Integer, default=0)
+    wickets = Column(Integer, default=0)
+    overs = Column(Float, default=0.0)
+    target = Column(Integer, nullable=True)            # Only set in 2nd innings
+    win_prob_batting = Column(Float, nullable=True)    # 0-100
+    win_prob_bowling = Column(Float, nullable=True)    # 0-100
+
+    match = relationship("Match")
+
+    __table_args__ = (
+        Index("ix_snapshot_match_time", "match_id", "timestamp"),
+    )

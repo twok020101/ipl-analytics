@@ -13,11 +13,13 @@ from pydantic import BaseModel
 from sqlalchemy import func, case, and_, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_analyst
+from app.config import CURRENT_SEASON
 from app.services.squad_service import get_squad_data, get_player_meta, get_squad_player_names
 from app.models.models import (
     Team,
     Player,
+    User,
     SquadMember,
     Match,
     Delivery,
@@ -54,7 +56,7 @@ def _name_to_id_map(db: Session, team_short: str) -> dict[str, int]:
         db.query(SquadMember)
         .join(Player, SquadMember.player_id == Player.id)
         .join(Team, SquadMember.team_id == Team.id)
-        .filter(SquadMember.season == "2026", Team.short_name == team_short)
+        .filter(SquadMember.season == CURRENT_SEASON, Team.short_name == team_short)
         .all()
     )
     return {m.player.name.lower(): m.player_id for m in members}
@@ -658,7 +660,7 @@ def _build_team_analysis(
 # -----------------------------------------------------------------------
 
 @router.post("/analysis/match")
-def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
+def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """
     Comprehensive match analysis endpoint.
 

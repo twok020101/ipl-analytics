@@ -7,11 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trophy } from "lucide-react";
+import { Trophy, TrendingUp } from "lucide-react";
 import { cn, getTeamTextColor } from "@/lib/utils";
+import Link from "next/link";
 
 export default function StandingsPage() {
-  const [season, setSeason] = useState("2024");
+  const [season, setSeason] = useState("2026");
 
   const { data: seasons } = useQuery({
     queryKey: ["seasons"],
@@ -24,14 +25,12 @@ export default function StandingsPage() {
     enabled: !!season,
   });
 
-  const standings = standingsData?.standings || standingsData || [];
+  const standings = standingsData?.standings ?? [];
 
-  const seasonOptions = (seasons || [
-    { season: "2024" }, { season: "2023" }, { season: "2022" }, { season: "2021" }, { season: "2020" },
-    { season: "2019" }, { season: "2018" }, { season: "2017" }, { season: "2016" }, { season: "2015" },
-    { season: "2014" }, { season: "2013" }, { season: "2012" }, { season: "2011" }, { season: "2010" },
-    { season: "2009" }, { season: "2008" },
-  ] as { season: string }[]).map((s) => ({ value: s.season, label: `IPL ${s.season}` }));
+  const seasonOptions = (seasons ?? [])
+    .slice()
+    .sort((a, b) => b.season.localeCompare(a.season))
+    .map((s) => ({ value: s.season, label: `IPL ${s.season}` }));
 
   return (
     <div className="space-y-6">
@@ -43,12 +42,21 @@ export default function StandingsPage() {
           </h1>
           <p className="text-muted-foreground mt-1">Points table for each IPL season</p>
         </div>
-        <div className="w-48">
-          <Select
-            options={seasonOptions}
-            value={season}
-            onChange={(e) => setSeason(e.target.value)}
-          />
+        <div className="flex items-center gap-3">
+          <Link
+            href="/standings/predictions"
+            className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors whitespace-nowrap"
+          >
+            <TrendingUp className="h-4 w-4" />
+            <span className="hidden sm:inline">Playoff</span> Predictions
+          </Link>
+          <div className="w-40 sm:w-48">
+            <Select
+              options={seasonOptions}
+              value={season}
+              onChange={(e) => setSeason(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

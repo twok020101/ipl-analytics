@@ -138,6 +138,69 @@
 
 ---
 
+## Session 3 (April 3, 2026)
+
+### Phase 13: Role-Based Access Control (RBAC)
+
+- **Role hierarchy**: admin > analyst > viewer with dependency-injection guards
+- **Protected endpoints**: strategy, analysis, AI (analyst+); user management (admin only)
+- **Admin user management**: list org users, change roles, enable/disable accounts
+- **Frontend**: nav items filtered by role, role badges in sidebar, admin user management page
+- **Self-protection**: admins cannot demote or deactivate themselves
+
+### Phase 14: Season Prediction (Monte Carlo)
+
+- **Monte Carlo simulation**: 10,000 season outcomes per request
+- **Team strength model**: weighted combination of win rate (50%), NRR (20%), recent form (30%)
+- **Bradley-Terry match probability** with H2H adjustment for teams with 3+ historical meetings
+- **Outputs per team**: playoff %, top-2 %, champion %, avg final points, avg final position
+- **Endpoint**: `GET /seasons/{season}/predictions`
+- **Frontend**: dedicated predictions page with probability bars, strength dots, color-coded cards
+- Accessible via "Playoff Predictions" button on Standings page
+
+### Phase 15: Post-Match Analysis with Turning Points
+
+- **LiveSnapshot DB model**: persists over-by-over match state from live polling for post-match replay
+- **Historical match analysis** (2008-2025): ball-by-ball replay through XGBoost, delivery-level turning points
+- **IPL 2026 analysis**: reconstructed from LiveSnapshot records (over-by-over granularity)
+- **Turning point detection**: flags overs where win probability swings >= 10%, classified as:
+  - Wicket cluster (2+ wickets in an over)
+  - Key dismissal (set batter with 25+ runs out)
+  - Big over (15+ runs scored)
+  - Momentum shift (general probability swing)
+- **Endpoint**: `GET /live/analysis/{match_id}`
+- **Frontend**: interactive Recharts area chart with turning point annotations, summary cards
+- **Live tracker updated**: `record_snapshot()` now persists to LiveSnapshot table for future replay
+
+### Phase 16: WebSocket for Live Scores
+
+- **FastAPI WebSocket**: `/ws/live` endpoint with connection manager broadcasting to all clients
+- **Background poll loop**: polls CricAPI every 30s during match windows, broadcasts to connected WS clients
+- **Connection manager**: tracks connected clients, auto-removes dead connections, caches latest state
+- **Frontend `useLiveScores` hook**: WebSocket-first with auto-reconnect (exponential backoff), HTTP polling fallback after 3 WS failures
+- **Connection status indicator**: shows "Live" (WS), "Polling" (fallback), "Reconnecting..." states
+- **Heartbeat**: client sends ping every 15s, server responds with pong
+
+### Phase 17: Multi-Team Dashboard
+
+- **Organization-team linking**: `Organization.team_id` FK to teams table; admin sets via `PATCH /auth/org/team`
+- **Scoped dashboard**: `GET /dashboard/my-team` returns team-specific data:
+  - Season record (W/L/Pts), squad list, upcoming matches, recent results
+  - Top batters and bowlers from the team's squad
+- **Frontend My Team page**: team command center with record stats, upcoming/results cards, squad grid with captain badge and overseas indicator
+- **Auth context extended**: user object includes `team_id` and `team_name` from org
+- **Nav item**: "My Team" appears for all logged-in users (shows setup prompt if no team linked)
+
+### Phase 18: Mobile UI/UX Overhaul
+
+- **Bottom tab navigation**: fixed bottom bar with 5 key items (Home, Live, Standings, Players, Analyze) — 44px touch targets
+- **Safe area support**: `env(safe-area-inset-bottom)` padding for notched devices (iPhone)
+- **Touch target enforcement**: CSS rule ensures minimum 44px height for all interactive elements on coarse pointer devices
+- **Bottom padding**: main content gets extra `pb-20` on mobile to avoid overlap with bottom nav
+- All new pages built mobile-first: card layouts, responsive grids, proper truncation
+
+---
+
 ## What's Next (Planned)
 
 ### Short-term
@@ -150,11 +213,11 @@
 
 ### Medium-term
 
-- [ ] Real-time score websocket (instead of 30s polling)
-- [ ] Post-match analysis with turning point identification
-- [ ] Season prediction (playoff qualifiers based on current standings)
-- [ ] Role-based access control (admin vs analyst vs viewer)
-- [ ] Multi-team dashboard (each team sees only their analysis)
+- [x] Real-time score websocket (instead of 30s polling)
+- [x] Post-match analysis with turning point identification
+- [x] Season prediction (playoff qualifiers based on current standings)
+- [x] Role-based access control (admin vs analyst vs viewer)
+- [x] Multi-team dashboard (each team sees only their analysis)
 
 ### Long-term
 

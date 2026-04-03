@@ -4,28 +4,26 @@ Live match tracking API endpoints.
 Provides real-time match scores, ML win probability, and dynamic game plans.
 """
 
-import asyncio
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import Optional
 
-from app.api.deps import get_db
+from app.api.deps import get_db, require_viewer
+from app.models.models import User
+from app.services.post_match import analyze_match
 from app.services.live_tracker import (
     init_tracker,
     fetch_live_scores,
     fetch_match_playing11,
     build_live_match_state,
+    build_scores_payload,
     predict_live_win_probability,
     poll_and_update,
     get_match_history,
     record_snapshot,
-    _extract_venue_city,
 )
-from app.services.weather import fetch_weather
-from app.services.game_plan_live import recalculate_game_plan
 from app.services.match_sync import sync_results
 from app.config import settings
 
@@ -40,53 +38,10 @@ if settings.CRICAPI_KEY:
 async def get_live_scores():
     """Get all live IPL match scores with ML win predictions.
 
-    Uses cricScore endpoint (1 API call for ALL matches).
-    Each live match includes real-time win probability from XGBoost model.
-    Syncing is handled by the daily background loop and the /live/sync endpoint.
+    Uses the shared build_scores_payload() which categorizes matches into
+    live/upcoming/result, runs ML models, and records snapshots.
     """
-    matches = await fetch_live_scores()
-
-    live_states = []
-    upcoming = []
-    results = []
-
-    for m in matches:
-        if m["match_state"] == "live":
-            state = await build_live_match_state(m)
-            # Record snapshot only if score changed since last one
-            score = state.get("current_score")
-            prev = get_match_history(m["id"])
-            if score and (not prev or prev[-1].get("current_score") != score):
-                record_snapshot(m["id"], state)
-            live_states.append(state)
-        elif m["match_state"] == "fixture":
-            upcoming.append({
-                "match_id": m["id"],
-                "team1": m["team1"],
-                "team2": m["team2"],
-                "datetime_gmt": m["datetime_gmt"],
-                "status": m["status"],
-            })
-        elif m["match_state"] == "result":
-            results.append({
-                "match_id": m["id"],
-                "team1": m["team1"],
-                "team2": m["team2"],
-                "team1_score": m["team1_score"],
-                "team2_score": m["team2_score"],
-                "status": m["status"],
-            })
-
-    for state in live_states:
-        mid = state.get("match_id")
-        state["history"] = get_match_history(mid) if mid else []
-
-    return {
-        "live": live_states,
-        "upcoming": upcoming[:5],
-        "recent_results": results[:5],
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-    }
+    return await build_scores_payload()
 
 
 @router.get("/match/{match_id}")
@@ -207,4 +162,30 @@ async def sync_match_results(db: Session = Depends(get_db)):
     Call this after a match ends to update standings and fixtures.
     """
     result = await sync_results(db)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Post-match analysis
+# ---------------------------------------------------------------------------
+
+@router.get("/analysis/{match_id}")
+def get_post_match_analysis(
+    match_id: int,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_viewer),
+):
+    """Post-match analysis with win probability curve and turning points.
+
+    For historical matches (2008-2025): ball-by-ball replay through XGBoost.
+    For IPL 2026 matches: over-by-over reconstruction from live snapshots.
+
+    Returns:
+      - curve: over-by-over win probability data points
+      - turning_points: moments where win prob swung >= 10%
+      - match metadata (teams, winner, scores)
+    """
+    result = analyze_match(db, match_id)
+    if not result:
+        return {"error": "Match not found or no data available"}
     return result

@@ -15,6 +15,13 @@ import type {
   AIResponse,
   DashboardStats,
   PaginatedResponse,
+  Fixture,
+  Squad,
+  PartnershipData,
+  RunDistributionData,
+  WicketTypesData,
+  PlayerCompareResult,
+  AppUser as AdminUser,
 } from "./types";
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || (
@@ -140,6 +147,35 @@ export const fetchSeasonStandings = (season: string) =>
 // Dashboard
 export const fetchDashboardStats = () => fetchAPI<DashboardStats>("/dashboard/stats");
 
+// Season Predictions
+export interface SeasonPrediction {
+  team_id: number;
+  team_name: string;
+  short_name: string;
+  current_played: number;
+  current_won: number;
+  current_lost: number;
+  current_points: number;
+  current_nrr: number;
+  strength_rating: number;
+  playoff_pct: number;
+  top_2_pct: number;
+  winner_pct: number;
+  avg_final_points: number;
+  avg_final_position: number;
+}
+
+export interface SeasonPredictionResult {
+  season: string;
+  simulations: number;
+  predictions: SeasonPrediction[];
+  remaining_matches: number;
+  completed_matches: number;
+}
+
+export const fetchSeasonPredictions = (season: string) =>
+  fetchAPI<SeasonPredictionResult>(`/seasons/${season}/predictions`);
+
 // Comprehensive Match Analysis
 export const fetchMatchAnalysis = (data: { team1: string; team2: string; venue_id: number }) =>
   fetchAPI<Record<string, unknown>>("/analysis/match", { method: "POST", body: JSON.stringify(data) });
@@ -149,8 +185,46 @@ export const fetchLiveScores = () => fetchAPI<Record<string, unknown>>("/live/sc
 export const fetchLiveMatch = (id: string) => fetchAPI<Record<string, unknown>>(`/live/match/${id}`);
 export const fetchLiveGamePlan = (id: string) => fetchAPI<Record<string, unknown>>(`/live/match/${id}/gameplan`);
 
+// Post-match analysis
+export interface WinProbPoint {
+  innings: number;
+  over: number;
+  runs: number;
+  wickets: number;
+  bat_first_win_prob: number;
+  bat_second_win_prob: number;
+  runs_in_over?: number;
+  wickets_in_over?: number;
+  timestamp?: string;
+}
+
+export interface TurningPoint extends WinProbPoint {
+  swing: number;
+  favours: string;
+  type: string;
+  description: string;
+}
+
+export interface PostMatchAnalysis {
+  match_id: number;
+  season: string;
+  date: string | null;
+  bat_first: { id: number; name: string; short_name: string };
+  bat_second: { id: number; name: string; short_name: string };
+  winner: { id: number; name: string; short_name: string };
+  result: string;
+  first_innings_score: number;
+  curve: WinProbPoint[];
+  turning_points: TurningPoint[];
+  total_overs: number;
+  data_source: "ball_by_ball" | "live_snapshots";
+  error?: string;
+}
+
+export const fetchPostMatchAnalysis = (matchId: number) =>
+  fetchAPI<PostMatchAnalysis>(`/live/analysis/${matchId}`);
+
 // External — IPL 2026
-import type { Fixture, Squad } from "./types";
 
 export const fetchFixtures = () => fetchAPI<Fixture[]>("/external/fixtures");
 export const fetchUpcomingFixtures = (limit = 5) =>
@@ -159,7 +233,6 @@ export const fetchSquads = () => fetchAPI<Record<string, Squad>>("/external/squa
 export const fetchSquad = (team: string) => fetchAPI<Squad>(`/external/squads/${team}`);
 
 // Visualizations
-import type { PartnershipData, RunDistributionData, WicketTypesData, PlayerCompareResult } from "./types";
 
 export const fetchPartnerships = (matchId: number, innings = 1) =>
   fetchAPI<PartnershipData>(`/viz/partnerships/${matchId}?innings=${innings}`);
@@ -174,3 +247,43 @@ export const fetchWicketTypes = (playerId: number, mode = "batter", season?: str
 };
 export const fetchPlayerCompare = (player1: number, player2: number) =>
   fetchAPI<PlayerCompareResult>(`/viz/player-compare?player1=${player1}&player2=${player2}`);
+
+// --- Admin: User Management ---
+
+export type { AdminUser };
+
+export const fetchUsers = () => fetchAPI<AdminUser[]>("/auth/users");
+
+export const updateUserRole = (userId: number, role: string) =>
+  fetchAPI<AdminUser>(`/auth/users/${userId}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+
+export const updateUserActive = (userId: number, isActive: boolean) =>
+  fetchAPI<AdminUser>(`/auth/users/${userId}/active`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: isActive }),
+  });
+
+export const linkOrgToTeam = (teamId: number) =>
+  fetchAPI<{ organization: string; team_id: number; team_name: string; short_name: string }>(
+    "/auth/org/team",
+    { method: "PATCH", body: JSON.stringify({ team_id: teamId }) },
+  );
+
+// --- Team-scoped dashboard ---
+
+export interface MyTeamDashboard {
+  team: { id: number; name: string; short_name: string };
+  season_record: { played: number; won: number; lost: number; points: number };
+  squad: { id: number; name: string; role: string; is_captain: boolean; country: string }[];
+  squad_size: number;
+  upcoming_matches: { match_id: number; opponent: string; date: string | null; venue: string | null }[];
+  recent_results: { match_id: number; opponent: string; result: string; margin: string | null; date: string | null }[];
+  top_batters: { name: string; runs: number; strike_rate: number }[];
+  top_bowlers: { name: string; wickets: number; economy: number }[];
+}
+
+export const fetchMyTeamDashboard = () =>
+  fetchAPI<MyTeamDashboard>("/dashboard/my-team");

@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
-from app.models.models import Team, Player, Venue
+from app.api.deps import get_db, require_analyst
+from app.models.models import User, Team, Player, Venue
 from app.services.stats import (
     get_team_stats,
     get_venue_stats,
@@ -43,7 +43,7 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/match-preview")
-def match_preview(req: MatchPreviewRequest, db: Session = Depends(get_db)):
+def match_preview(req: MatchPreviewRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Generate AI-powered match preview."""
     team1 = db.query(Team).get(req.team1_id)
     team2 = db.query(Team).get(req.team2_id)
@@ -71,7 +71,7 @@ def match_preview(req: MatchPreviewRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/player-report")
-def player_report(req: PlayerReportRequest, db: Session = Depends(get_db)):
+def player_report(req: PlayerReportRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Generate AI-powered scouting report."""
     player = db.query(Player).get(req.player_id)
     if not player:
@@ -107,7 +107,7 @@ def player_report(req: PlayerReportRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/chat")
-def ai_chat(req: ChatRequest, db: Session = Depends(get_db)):
+def ai_chat(req: ChatRequest, db: Session = Depends(get_db), _user: User = Depends(require_analyst)):
     """Chat with AI analytics assistant."""
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty")

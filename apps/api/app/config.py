@@ -33,3 +33,6 @@ settings = Settings()
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 MODEL_DIR = Path(__file__).resolve().parents[1] / "trained_models"
+
+# The current live IPL season — single source of truth for all "2026" references
+CURRENT_SEASON = "2026"
