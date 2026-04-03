@@ -175,7 +175,10 @@ def get_my_team_dashboard(
     top_batters = (
         db.query(Player.name, PlayerSeasonBatting.runs, PlayerSeasonBatting.strike_rate)
         .join(Player, PlayerSeasonBatting.player_id == Player.id)
-        .filter(PlayerSeasonBatting.player_id.in_(squad_ids))
+        .filter(
+            PlayerSeasonBatting.player_id.in_(squad_ids),
+            PlayerSeasonBatting.season == CURRENT_SEASON,
+        )
         .order_by(PlayerSeasonBatting.runs.desc())
         .limit(5)
         .all()
@@ -184,7 +187,10 @@ def get_my_team_dashboard(
     top_bowlers = (
         db.query(Player.name, PlayerSeasonBowling.wickets, PlayerSeasonBowling.economy)
         .join(Player, PlayerSeasonBowling.player_id == Player.id)
-        .filter(PlayerSeasonBowling.player_id.in_(squad_ids))
+        .filter(
+            PlayerSeasonBowling.player_id.in_(squad_ids),
+            PlayerSeasonBowling.season == CURRENT_SEASON,
+        )
         .order_by(PlayerSeasonBowling.wickets.desc())
         .limit(5)
         .all()

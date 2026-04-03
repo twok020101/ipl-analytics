@@ -52,18 +52,49 @@ async def sync_match_results(
     _: None = Depends(verify_cron_secret),
     db: Session = Depends(get_db),
 ):
-    """Sync completed match results from CricAPI to database."""
+    """Sync completed match results and player stats from CricAPI to database."""
     if not settings.CRICAPI_KEY:
         return {"status": "skipped", "reason": "CRICAPI_KEY not configured"}
 
     try:
         from app.services.match_sync import sync_results
+        from app.services.scorecard_sync import sync_player_stats
 
+        # Sync match results first (scores, winners)
         result = await sync_results(db)
         logger.info(f"Cron sync results: {result}")
-        return {"status": "synced", **result}
+
+        # Then sync per-player batting/bowling stats from scorecards
+        stats_result = await sync_player_stats(db)
+        logger.info(f"Cron player stats: {stats_result}")
+
+        return {"status": "synced", "match_sync": result, "player_stats": stats_result}
     except Exception as e:
         logger.error(f"Cron sync exception: {e}")
+        return {"status": "error", "detail": str(e)}
+
+
+@router.post("/sync-player-stats")
+async def sync_player_stats_endpoint(
+    _: None = Depends(verify_cron_secret),
+    db: Session = Depends(get_db),
+):
+    """Standalone endpoint to sync player batting/bowling stats from CricAPI scorecards.
+
+    Fetches scorecards for all completed 2026 matches and aggregates
+    per-player stats into PlayerSeasonBatting/Bowling tables.
+    """
+    if not settings.CRICAPI_KEY:
+        return {"status": "skipped", "reason": "CRICAPI_KEY not configured"}
+
+    try:
+        from app.services.scorecard_sync import sync_player_stats
+
+        result = await sync_player_stats(db)
+        logger.info(f"Player stats sync: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Player stats sync exception: {e}")
         return {"status": "error", "detail": str(e)}
 
 

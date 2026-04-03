@@ -194,7 +194,7 @@ export default function MyTeamPage() {
           <CardContent>
             <div className="space-y-2">
               {data.top_batters.map((b, i) => (
-                <div key={b.name} className="flex items-center justify-between py-1.5">
+                <div key={i} className="flex items-center justify-between py-1.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
                     <span className="text-sm font-medium">{b.name}</span>
@@ -223,7 +223,7 @@ export default function MyTeamPage() {
           <CardContent>
             <div className="space-y-2">
               {data.top_bowlers.map((b, i) => (
-                <div key={b.name} className="flex items-center justify-between py-1.5">
+                <div key={i} className="flex items-center justify-between py-1.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
                     <span className="text-sm font-medium">{b.name}</span>
