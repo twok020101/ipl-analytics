@@ -34,14 +34,14 @@ def load_all_data(db: Session) -> dict:
         SELECT d.match_id, d.innings,
             MAX(d.team_runs) as total_runs,
             MAX(d.team_wickets) as total_wickets,
-            SUM(CASE WHEN d.over_num <= 5 AND d.valid_ball=1 THEN d.runs_total ELSE 0 END) as pp_runs,
-            SUM(CASE WHEN d.over_num BETWEEN 6 AND 14 AND d.valid_ball=1 THEN d.runs_total ELSE 0 END) as middle_runs,
-            SUM(CASE WHEN d.over_num >= 15 AND d.valid_ball=1 THEN d.runs_total ELSE 0 END) as death_runs,
-            SUM(CASE WHEN d.over_num <= 5 AND d.valid_ball=1 THEN 1 ELSE 0 END) as pp_balls,
-            SUM(CASE WHEN d.over_num >= 15 AND d.valid_ball=1 THEN 1 ELSE 0 END) as death_balls,
+            SUM(CASE WHEN d.over_num <= 5 AND d.valid_ball=true THEN d.runs_total ELSE 0 END) as pp_runs,
+            SUM(CASE WHEN d.over_num BETWEEN 6 AND 14 AND d.valid_ball=true THEN d.runs_total ELSE 0 END) as middle_runs,
+            SUM(CASE WHEN d.over_num >= 15 AND d.valid_ball=true THEN d.runs_total ELSE 0 END) as death_runs,
+            SUM(CASE WHEN d.over_num <= 5 AND d.valid_ball=true THEN 1 ELSE 0 END) as pp_balls,
+            SUM(CASE WHEN d.over_num >= 15 AND d.valid_ball=true THEN 1 ELSE 0 END) as death_balls,
             SUM(CASE WHEN d.runs_batter >= 4 THEN 1 ELSE 0 END) as boundaries,
             SUM(CASE WHEN d.runs_batter = 6 THEN 1 ELSE 0 END) as sixes,
-            SUM(CASE WHEN d.valid_ball=1 AND d.runs_total=0 THEN 1 ELSE 0 END) as dots
+            SUM(CASE WHEN d.valid_ball=true AND d.runs_total=0 THEN 1 ELSE 0 END) as dots
         FROM deliveries d
         GROUP BY d.match_id, d.innings
     """), engine)
