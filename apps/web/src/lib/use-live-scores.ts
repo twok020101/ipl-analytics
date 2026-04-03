@@ -127,6 +127,7 @@ export function useLiveScores(): UseLiveScoresReturn {
         if (!mountedRef.current) return;
         try {
           const payload = JSON.parse(event.data);
+          if (payload.type === "heartbeat") return; // Server keepalive — ignore
           if (payload.type === "live_update") {
             setData({
               live: payload.live || [],

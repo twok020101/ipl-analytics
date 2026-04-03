@@ -25,7 +25,7 @@ logger = logging.getLogger("ws_manager")
 # ---------------------------------------------------------------------------
 
 POLL_INTERVAL = 20   # Seconds between CricAPI polls (matches SCORE_CACHE_TTL)
-HEARTBEAT_INTERVAL = 20  # Send ping every N seconds to keep connection alive
+HEARTBEAT_INTERVAL = 15  # Send heartbeat every N seconds to keep connection alive
 
 # ---------------------------------------------------------------------------
 # Connection manager
@@ -42,6 +42,7 @@ class LiveScoreManager:
     def __init__(self):
         self._connections: Set[WebSocket] = set()
         self._poll_task: asyncio.Task | None = None
+        self._heartbeat_task: asyncio.Task | None = None
         self._latest_state: dict | None = None  # Cache for new connections
         self._last_fingerprint: str | None = None  # Change detection
 
@@ -58,7 +59,8 @@ class LiveScoreManager:
         # Send latest state immediately so client doesn't wait for next poll
         if self._latest_state:
             try:
-                await ws.send_json(self._latest_state)
+                initial = {**self._latest_state, "type": "live_update"}
+                await ws.send_json(initial)
             except Exception:
                 pass
 
@@ -83,7 +85,7 @@ class LiveScoreManager:
             self._connections.discard(ws)
 
     async def start_polling(self):
-        """Start the background CricAPI polling loop.
+        """Start the background CricAPI polling loop and server heartbeat.
 
         Only polls during match windows (checked by live_tracker).
         Broadcasts results to all connected WebSocket clients.
@@ -92,17 +94,19 @@ class LiveScoreManager:
             return  # Already running
 
         self._poll_task = asyncio.create_task(self._poll_loop())
-        print("WS live score polling started")
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        print("WS live score polling + heartbeat started")
 
     async def stop_polling(self):
-        """Stop the background polling loop."""
-        if self._poll_task:
-            self._poll_task.cancel()
-            try:
-                await self._poll_task
-            except asyncio.CancelledError:
-                pass
-        print("WS live score polling stopped")
+        """Stop the background polling and heartbeat loops."""
+        for task in (self._poll_task, self._heartbeat_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        print("WS live score polling + heartbeat stopped")
 
     @staticmethod
     def _score_fingerprint(payload: dict) -> str:
@@ -131,6 +135,27 @@ class LiveScoreManager:
         parts.append(f"r:{len(payload.get('recent_results', []))}")
         return "|".join(parts)
 
+    async def _heartbeat_loop(self):
+        """Send periodic server→client pings to keep connections alive.
+
+        Railway / load balancers may close idle WebSocket connections.
+        This ensures there is always server-initiated traffic even when
+        no score changes are being broadcast.
+        """
+        while True:
+            try:
+                dead: list[WebSocket] = []
+                for ws in list(self._connections):
+                    try:
+                        await ws.send_json({"type": "heartbeat"})
+                    except Exception:
+                        dead.append(ws)
+                for ws in dead:
+                    self._connections.discard(ws)
+                await asyncio.sleep(HEARTBEAT_INTERVAL)
+            except asyncio.CancelledError:
+                break
+
     async def _poll_loop(self):
         """Background loop: fetch scores, broadcast only when data changes.
 
@@ -143,9 +168,8 @@ class LiveScoreManager:
 
         while True:
             try:
-                print(f"WS poll tick (manager id={id(self)}) — {self.connection_count} client(s) connected, fetching scores...")
+                print(f"WS poll tick — {self.connection_count} client(s), fetching scores...")
                 if self._connections:
-                    print(f"WS poll tick (manager id={id(self)}) — {self.connection_count} client(s) connected, fetching scores...")
                     # Reuses the same payload builder as GET /live/scores
                     payload = await build_scores_payload()
                     fingerprint = self._score_fingerprint(payload)

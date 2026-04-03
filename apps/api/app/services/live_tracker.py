@@ -353,10 +353,12 @@ def predict_live_win_probability(
     if innings == 1:
         model = models["model_1st_innings"]
         over_num = int(overs)
-        run_rate = runs / max(overs, 0.1)
+        balls_bowled = int(over_num * 6 + round((overs - over_num) * 10))
+        decimal_overs = balls_bowled / 6.0
+        run_rate = runs / max(decimal_overs, 0.1)
         wickets_remaining = 10 - wickets
         overs_remaining = 19 - over_num
-        projected = runs / max(overs / 20.0, 0.05)
+        projected = runs / max(decimal_overs / 20.0, 0.05)
         above_par = (projected - venue_avg) / max(venue_avg, 1)
 
         features = np.array([[runs, wickets, over_num, run_rate, wickets_remaining,
@@ -373,10 +375,12 @@ def predict_live_win_probability(
     else:
         model = models["model_2nd_innings"]
         over_num = int(overs)
+        balls_bowled = int(over_num * 6 + round((overs - over_num) * 10))
+        decimal_overs = balls_bowled / 6.0
         remaining_runs = target - runs + 1
         remaining_overs = max(20 - over_num - 1, 0.1)
         required_rate = remaining_runs / remaining_overs
-        current_rate = runs / max(overs, 0.1)
+        current_rate = runs / max(decimal_overs, 0.1)
         wickets_remaining = 10 - wickets
 
         features = np.array([[runs, wickets, over_num, target, remaining_runs,
@@ -396,15 +400,18 @@ def predict_live_win_probability(
 
 def _heuristic_probability(innings, runs, wickets, overs, target, venue_avg):
     """Fallback when ML model not available."""
+    over_num = int(overs)
+    balls_bowled = int(over_num * 6 + round((overs - over_num) * 10))
+    decimal_overs = balls_bowled / 6.0
     if innings == 1:
-        projected = runs / max(overs / 20.0, 0.05)
+        projected = runs / max(decimal_overs / 20.0, 0.05)
         prob = 0.5 + (projected - venue_avg) / (venue_avg * 2)
         prob = max(0.1, min(0.9, prob))
     else:
         if target <= 0:
             return {"batting_team_win_prob": 50.0, "bowling_team_win_prob": 50.0, "model": "heuristic"}
         remaining = target - runs + 1
-        remaining_overs = max(20 - overs, 0.1)
+        remaining_overs = max(20 - decimal_overs, 0.1)
         req_rate = remaining / remaining_overs
         wickets_left = 10 - wickets
         prob = max(0.05, min(0.95, 0.5 + (wickets_left * 0.05) - (req_rate - 8) * 0.08))

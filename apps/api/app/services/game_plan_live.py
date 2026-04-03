@@ -27,8 +27,9 @@ def recalculate_game_plan(
     balls_bowled = int(over_num * 6 + round((overs - over_num) * 10))
     balls_remaining = 120 - balls_bowled
     overs_remaining = balls_remaining / 6.0
+    decimal_overs = balls_bowled / 6.0  # convert cricket notation (e.g. 8.5 = 8 ov 5 balls) to decimal
     wickets_in_hand = 10 - wickets
-    current_rr = runs / max(overs, 0.1)
+    current_rr = runs / max(decimal_overs, 0.1)
 
     # Determine phase
     if over_num < 6:
