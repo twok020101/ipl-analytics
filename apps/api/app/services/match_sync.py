@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
 from app.models.models import Match, Team
-from app.config import settings
+from app.config import settings, CURRENT_SEASON
 from app.services.cricapi_utils import parse_score, extract_team_short
 
 
@@ -78,7 +78,7 @@ async def sync_results(db: Session) -> dict:
             # between the same two teams.
             cutoff = date.today() + timedelta(days=2)
             db_match = db.query(Match).filter(
-                Match.season == "2026",
+                Match.season == CURRENT_SEASON,
                 Match.winner_id.is_(None),
                 Match.date <= cutoff,
                 or_(

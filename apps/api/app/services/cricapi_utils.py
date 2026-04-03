@@ -1,6 +1,7 @@
-"""Shared CricAPI utility functions for parsing scores and team names."""
+"""Shared cricket utility functions — score parsing, overs conversion, toss resolution."""
 
 import re
+from typing import Tuple
 
 # Pre-compiled regex patterns
 _SCORE_FULL_RE = re.compile(r"(\d+)/(\d+)\s*\((\d+\.?\d*)\)")
@@ -36,3 +37,36 @@ def extract_team_short(team_str: str) -> str:
         short = m.group(1)
         return "RCB" if short == "RCBW" else short
     return team_str.split()[0] if team_str.strip() else ""
+
+
+def cricket_overs_to_decimal(overs: float) -> float:
+    """Convert cricket overs notation to decimal overs.
+
+    In cricket, 19.4 means 19 overs and 4 balls = 19 + 4/6 = 19.667 overs.
+    The fractional part represents balls (0-5), not a decimal fraction.
+    """
+    whole = int(overs)
+    balls = round((overs - whole) * 10)
+    return whole + balls / 6.0
+
+
+def resolve_batting_order(
+    toss_winner_id: int | None,
+    toss_decision: str | None,
+    team1_id: int,
+    team2_id: int,
+) -> Tuple[int, int]:
+    """Determine which team batted first from toss data.
+
+    Returns (bat_first_id, bat_second_id). Falls back to team1 batting
+    first if toss data is unavailable.
+    """
+    if toss_winner_id and toss_decision:
+        if toss_decision == "bat":
+            bat_first = toss_winner_id
+        else:
+            bat_first = team2_id if toss_winner_id == team1_id else team1_id
+    else:
+        bat_first = team1_id
+    bat_second = team2_id if bat_first == team1_id else team1_id
+    return bat_first, bat_second

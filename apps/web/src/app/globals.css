@@ -64,3 +64,15 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
+
+/* Safe area padding for mobile bottom nav (notched devices) */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Touch target sizing — ensure minimum 44px for interactive elements on mobile */
+@media (pointer: coarse) {
+  button, a, select, input {
+    min-height: 44px;
+  }
+}

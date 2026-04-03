@@ -58,3 +58,11 @@ export function getTeamBg(team: string): string {
 export function getTeamTextColor(team: string): string {
   return teamColors[team]?.text || "text-gray-400";
 }
+
+/** Human-friendly relative time string (e.g., "30s ago", "5m ago"). */
+export function timeAgo(isoString: string): string {
+  const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  return `${Math.floor(diff / 3600)}h ago`;
+}

@@ -1,23 +1,16 @@
-"""Season and standings API routes."""
+"""Season and standings API routes, including playoff prediction."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
-from app.api.deps import get_db
-from app.models.models import Match, Team, Delivery
+from app.api.deps import get_db, require_viewer
+from app.models.models import Match, Team, Delivery, User
+from app.services.season_predictor import predict_season
+from app.services.cricapi_utils import cricket_overs_to_decimal, resolve_batting_order
 from typing import Dict
 
 router = APIRouter(prefix="/seasons", tags=["seasons"])
-
-
-def _cricket_overs_to_decimal(overs: float) -> float:
-    """Convert cricket overs notation to decimal.
-    19.4 means 19 overs and 4 balls = 19 + 4/6 = 19.667 overs.
-    """
-    whole = int(overs)
-    balls = round((overs - whole) * 10)  # .4 -> 4 balls
-    return whole + balls / 6.0
 
 
 @router.get("")
@@ -46,58 +39,17 @@ def list_seasons(db: Session = Depends(get_db)):
     ]
 
 
-def _compute_innings_from_deliveries(db: Session, match_id: int):
-    """Compute per-innings runs and overs from ball-by-ball deliveries.
-    Returns list of dicts: [{team_id, runs, overs, wickets}, ...]
-    """
-    # Get runs, valid balls, and wickets per innings
-    innings_data = (
-        db.query(
-            Delivery.innings,
-            func.max(Delivery.team_runs).label("runs"),
-            func.sum(
-                func.cast(Delivery.valid_ball == True, db.bind.dialect.type_descriptor(type(1)) if hasattr(db.bind, 'dialect') else None) if False else
-                Delivery.valid_ball
-            ).label("balls"),
-            func.max(Delivery.team_wickets).label("wickets"),
-        )
-        .filter(Delivery.match_id == match_id)
-        .group_by(Delivery.innings)
-        .order_by(Delivery.innings)
-        .all()
-    )
-    return innings_data
-
-
-def _get_innings_totals(db: Session, match_id: int):
-    """Get (runs, overs) for each innings from deliveries table.
-
-    Returns: [(inn1_runs, inn1_overs), (inn2_runs, inn2_overs)] or None
-    NRR uses overs = balls/6 for the team that batted.
-    If a team is all out or completes 20 overs, overs = 20.
-    If a team chases successfully, overs = actual balls faced / 6.
-    """
-    # Count valid balls and max team_runs per innings
-    results = []
-    for inn in [1, 2]:
-        row = db.query(
-            func.max(Delivery.team_runs).label("runs"),
-            func.count(Delivery.id).label("total_deliveries"),
-        ).filter(
-            Delivery.match_id == match_id,
-            Delivery.innings == inn,
-            Delivery.valid_ball == True,
-        ).first()
-
-        if not row or row.runs is None:
-            return None
-
-        runs = row.runs
-        balls = row.total_deliveries
-        overs = balls / 6.0
-        results.append((runs, overs))
-
-    return results if len(results) == 2 else None
+def _apply_nrr(standings: dict, bat_first: int, bat_second: int,
+               inn1_runs: float, inn1_overs: float, inn2_runs: float, inn2_overs: float):
+    """Accumulate NRR runs/overs for both teams from a single match."""
+    standings[bat_first]["for_runs"] += inn1_runs
+    standings[bat_first]["for_overs"] += inn1_overs
+    standings[bat_first]["against_runs"] += inn2_runs
+    standings[bat_first]["against_overs"] += inn2_overs
+    standings[bat_second]["for_runs"] += inn2_runs
+    standings[bat_second]["for_overs"] += inn2_overs
+    standings[bat_second]["against_runs"] += inn1_runs
+    standings[bat_second]["against_overs"] += inn1_overs
 
 
 @router.get("/{season}/standings")
@@ -107,34 +59,47 @@ def get_standings(season: str, db: Session = Depends(get_db)):
     if not matches:
         raise HTTPException(status_code=404, detail=f"No matches found for season '{season}'")
 
-    # Initialize standings for all teams in this season
-    standings: Dict[int, dict] = {}
+    # Pre-load all teams in this season in one query (avoids N+1)
+    all_team_ids = {tid for m in matches for tid in [m.team1_id, m.team2_id] if tid}
+    team_cache = {t.id: t for t in db.query(Team).filter(Team.id.in_(all_team_ids)).all()}
 
-    for m in matches:
-        for tid in [m.team1_id, m.team2_id]:
-            if tid and tid not in standings:
-                team = db.query(Team).get(tid)
-                standings[tid] = {
-                    "team_id": tid,
-                    "team_name": team.name if team else "Unknown",
-                    "short_name": team.short_name if team else "?",
-                    "played": 0,
-                    "won": 0,
-                    "lost": 0,
-                    "no_result": 0,
-                    "points": 0,
-                    "nrr": 0.0,
-                    "for_runs": 0,
-                    "for_overs": 0.0,
-                    "against_runs": 0,
-                    "against_overs": 0.0,
-                }
+    # Batch-fetch ball-by-ball innings data for all matches (avoids 2 queries per match)
+    match_ids = [m.id for m in matches]
+    innings_rows = (
+        db.query(
+            Delivery.match_id,
+            Delivery.innings,
+            func.max(Delivery.team_runs).label("runs"),
+            func.count(Delivery.id).label("balls"),
+        )
+        .filter(Delivery.match_id.in_(match_ids), Delivery.valid_ball == True)
+        .group_by(Delivery.match_id, Delivery.innings)
+        .all()
+    ) if match_ids else []
+    # Build lookup: match_id → {innings_num: (runs, overs)}
+    innings_by_match: Dict[int, Dict[int, tuple]] = {}
+    for row in innings_rows:
+        innings_by_match.setdefault(row.match_id, {})[row.innings] = (
+            row.runs, row.balls / 6.0,
+        )
+
+    # Initialize standings
+    standings: Dict[int, dict] = {}
+    for tid in all_team_ids:
+        team = team_cache.get(tid)
+        standings[tid] = {
+            "team_id": tid,
+            "team_name": team.name if team else "Unknown",
+            "short_name": team.short_name if team else "?",
+            "played": 0, "won": 0, "lost": 0, "no_result": 0,
+            "points": 0, "nrr": 0.0,
+            "for_runs": 0, "for_overs": 0.0,
+            "against_runs": 0, "against_overs": 0.0,
+        }
 
     for m in matches:
         if not m.team1_id or not m.team2_id:
             continue
-
-        # Skip unplayed matches
         if m.winner_id is None and m.first_innings_score is None:
             continue
 
@@ -152,100 +117,39 @@ def get_standings(season: str, db: Session = Depends(get_db)):
             standings[m.team2_id]["no_result"] += 1
             standings[m.team2_id]["points"] += 1
 
-        # NRR calculation
-        # Try deliveries first (most accurate — gives actual balls faced)
-        innings = _get_innings_totals(db, m.id)
-
-        if innings:
-            inn1_runs, inn1_overs = innings[0]
-            inn2_runs, inn2_overs = innings[1]
-
-            # team1 batted first (innings 1), team2 batted second (innings 2)
-            # Team1: scored inn1_runs in inn1_overs, conceded inn2_runs in inn2_overs
-            standings[m.team1_id]["for_runs"] += inn1_runs
-            standings[m.team1_id]["for_overs"] += inn1_overs
-            standings[m.team1_id]["against_runs"] += inn2_runs
-            standings[m.team1_id]["against_overs"] += inn2_overs
-
-            # Team2: scored inn2_runs in inn2_overs, conceded inn1_runs in inn1_overs
-            standings[m.team2_id]["for_runs"] += inn2_runs
-            standings[m.team2_id]["for_overs"] += inn2_overs
-            standings[m.team2_id]["against_runs"] += inn1_runs
-            standings[m.team2_id]["against_overs"] += inn1_overs
+        # NRR: try batch-loaded deliveries first, then stored scores, then estimate
+        inn_data = innings_by_match.get(m.id, {})
+        if 1 in inn_data and 2 in inn_data:
+            inn1_runs, inn1_overs = inn_data[1]
+            inn2_runs, inn2_overs = inn_data[2]
+            _apply_nrr(standings, m.team1_id, m.team2_id, inn1_runs, inn1_overs, inn2_runs, inn2_overs)
 
         elif m.first_innings_score and m.second_innings_score:
-            # Use stored scores — use actual overs if available
             inn1_runs = m.first_innings_score
             inn2_runs = m.second_innings_score
-            # Overs stored as cricket format (19.4 = 19 overs 4 balls)
-            # Convert to decimal overs for NRR: 19.4 -> 19 + 4/6 = 19.667
-            raw1 = getattr(m, 'first_innings_overs', None)
-            raw2 = getattr(m, 'second_innings_overs', None)
-            inn1_overs = _cricket_overs_to_decimal(raw1) if raw1 else 20.0
-            inn2_overs = _cricket_overs_to_decimal(raw2) if raw2 else 20.0
+            inn1_overs = cricket_overs_to_decimal(m.first_innings_overs) if m.first_innings_overs else 20.0
+            inn2_overs = cricket_overs_to_decimal(m.second_innings_overs) if m.second_innings_overs else 20.0
 
             if inn2_overs == 20.0 and m.win_type == "wickets" and m.win_margin:
                 inn2_overs = max(10.0, 20.0 - m.win_margin * 0.5)
 
-            # Determine batting-first team from toss
-            if m.toss_winner_id and m.toss_decision:
-                if m.toss_decision == "bat":
-                    bat_first_id = m.toss_winner_id
-                    bat_second_id = m.team2_id if m.toss_winner_id == m.team1_id else m.team1_id
-                else:  # chose to bowl/field
-                    bat_second_id = m.toss_winner_id
-                    bat_first_id = m.team2_id if m.toss_winner_id == m.team1_id else m.team1_id
-            else:
-                bat_first_id = m.team1_id
-                bat_second_id = m.team2_id
-
-            standings[bat_first_id]["for_runs"] += inn1_runs
-            standings[bat_first_id]["for_overs"] += inn1_overs
-            standings[bat_first_id]["against_runs"] += inn2_runs
-            standings[bat_first_id]["against_overs"] += inn2_overs
-
-            standings[bat_second_id]["for_runs"] += inn2_runs
-            standings[bat_second_id]["for_overs"] += inn2_overs
-            standings[bat_second_id]["against_runs"] += inn1_runs
-            standings[bat_second_id]["against_overs"] += inn1_overs
+            bf, bs = resolve_batting_order(m.toss_winner_id, m.toss_decision, m.team1_id, m.team2_id)
+            _apply_nrr(standings, bf, bs, inn1_runs, inn1_overs, inn2_runs, inn2_overs)
 
         elif m.winner_id and m.win_margin and m.win_type:
-            # Minimal fallback for 2026 matches: estimate from result string
-            # "Won by X runs" → batting first team scored more, assume ~165 avg
-            # "Won by X wickets" → chasing team won
             avg_score = 165
             if m.win_type == "runs":
                 inn1_runs = avg_score + m.win_margin // 2
                 inn2_runs = avg_score - m.win_margin // 2
-                inn1_overs = 20.0
-                inn2_overs = 20.0
-            else:  # wickets
+                inn1_overs = inn2_overs = 20.0
+            else:
                 inn1_runs = avg_score
-                inn2_runs = avg_score + 1  # chased successfully
+                inn2_runs = avg_score + 1
                 inn1_overs = 20.0
                 inn2_overs = max(10.0, 20.0 - m.win_margin * 0.5)
 
-            # Determine who batted first — if we have toss data use it
-            if m.toss_winner_id and m.toss_decision:
-                if m.toss_decision == "bat":
-                    bat_first_id = m.toss_winner_id
-                    bat_second_id = m.team2_id if m.toss_winner_id == m.team1_id else m.team1_id
-                else:
-                    bat_second_id = m.toss_winner_id
-                    bat_first_id = m.team2_id if m.toss_winner_id == m.team1_id else m.team1_id
-            else:
-                bat_first_id = m.team1_id
-                bat_second_id = m.team2_id
-
-            standings[bat_first_id]["for_runs"] += inn1_runs
-            standings[bat_first_id]["for_overs"] += inn1_overs
-            standings[bat_first_id]["against_runs"] += inn2_runs
-            standings[bat_first_id]["against_overs"] += inn2_overs
-
-            standings[bat_second_id]["for_runs"] += inn2_runs
-            standings[bat_second_id]["for_overs"] += inn2_overs
-            standings[bat_second_id]["against_runs"] += inn1_runs
-            standings[bat_second_id]["against_overs"] += inn1_overs
+            bf, bs = resolve_batting_order(m.toss_winner_id, m.toss_decision, m.team1_id, m.team2_id)
+            _apply_nrr(standings, bf, bs, inn1_runs, inn1_overs, inn2_runs, inn2_overs)
 
     # Calculate NRR: (runs scored / overs faced) - (runs conceded / overs bowled)
     for tid, s in standings.items():
@@ -271,3 +175,21 @@ def get_standings(season: str, db: Session = Depends(get_db)):
         "season": season,
         "standings": sorted_standings,
     }
+
+
+@router.get("/{season}/predictions")
+def get_season_predictions(
+    season: str,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_viewer),
+):
+    """Monte Carlo playoff qualification predictions for a season.
+
+    Simulates remaining matches 10,000 times using team strength ratings
+    (win rate, NRR, form, H2H) to estimate each team's probability of
+    finishing in the top 4, top 2, or winning the title.
+    """
+    result = predict_season(db, season)
+    if not result["predictions"]:
+        raise HTTPException(status_code=404, detail=f"No data for season '{season}'")
+    return result

@@ -1,14 +1,7 @@
 "use client";
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { BASE_URL } from "@/lib/api";
-
-interface User {
-  id: number;
-  email: string;
-  name: string;
-  role: string;
-  organization_id: number | null;
-}
+import type { AppUser as User, UserRole } from "@/lib/types";
 
 interface AuthContextType {
   user: User | null;
@@ -17,6 +10,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string, organization?: string) => Promise<void>;
   logout: () => void;
+  /** Check if user has at least the given role level */
+  hasRole: (minimum: UserRole) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -85,8 +80,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  /** Role hierarchy check: viewer < analyst < admin */
+  const hasRole = useCallback(
+    (minimum: UserRole): boolean => {
+      if (!user) return false;
+      const rank: Record<string, number> = { viewer: 0, analyst: 1, admin: 2 };
+      return (rank[user.role] ?? -1) >= (rank[minimum] ?? 99);
+    },
+    [user],
+  );
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, hasRole }}>
       {children}
     </AuthContext.Provider>
   );

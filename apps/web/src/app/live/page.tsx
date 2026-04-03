@@ -1,7 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { fetchLiveScores } from "@/lib/api";
+/**
+ * Live Matches page — real-time scores via WebSocket with HTTP fallback.
+ *
+ * Uses WebSocket connection to /ws/live for instant score updates (~30s).
+ * Falls back to HTTP polling if WebSocket fails after 3 attempts.
+ * Shows connection status indicator, win probability charts, game plans, weather.
+ */
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,8 +24,10 @@ import {
   Swords,
   Clock,
   AlertTriangle,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
-import { cn, getTeamColor, getTeamTextColor, getTeamBg } from "@/lib/utils";
+import { cn, getTeamColor, getTeamTextColor, getTeamBg, timeAgo } from "@/lib/utils";
 import {
   LineChart,
   Line,
@@ -30,93 +38,18 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
-import { useState, useEffect, useRef } from "react";
-
-// ---- Types ----
-
-interface ScoreData {
-  runs: number;
-  wickets: number;
-  overs: number;
-}
-
-interface WinProbability {
-  [team: string]: number;
-}
-
-interface GamePlan {
-  win_probability?: Record<string, unknown>;
-  situation?: string;
-  projected_score?: number;
-  par_score?: number;
-  phase?: string;
-  chase_status?: string;
-  runs_needed?: number;
-  balls_remaining?: number;
-  required_rate?: number;
-  current_rate?: number;
-  batting_plan?: {
-    approach?: string;
-    advice?: string;
-    target_score?: number;
-    current_rr?: number;
-    required_rr_for_par?: number;
-  };
-  bowling_plan?: {
-    advice?: string;
-    dot_ball_target?: string;
-    priority?: string;
-  };
-  weather_impact?: string;
-}
-
-interface WeatherData {
-  available: boolean;
-  city?: string;
-  temperature?: number;
-  humidity?: number;
-  dew_point?: number;
-  dew_factor?: string;
-  precipitation_mm?: number;
-  rain_risk?: string;
-  wind_speed_kmh?: number;
-  cloud_cover_pct?: number;
-  impact?: string[];
-  toss_recommendation_adjustment?: string | null;
-}
-
-interface LiveMatch {
-  match_id: string;
-  team1: string;
-  team2: string;
-  status: string;
-  state: string;
-  innings?: number;
-  batting_team?: string;
-  bowling_team?: string;
-  current_score?: ScoreData;
-  target?: number;
-  first_innings_score?: ScoreData;
-  win_probability?: WinProbability;
-  prediction_details?: Record<string, unknown>;
-  game_plan?: GamePlan;
-  weather?: WeatherData;
-  history?: HistorySnapshot[];
-}
-
-interface HistorySnapshot {
-  timestamp: string;
-  win_probability?: WinProbability;
-  current_score?: ScoreData;
-  innings?: number;
-}
-
-interface LiveScoresResponse {
-  live: LiveMatch[];
-  upcoming: { match_id: string; team1: string; team2: string; datetime_gmt: string; status: string }[];
-  recent_results: { match_id: string; team1: string; team2: string; team1_score: ScoreData; team2_score: ScoreData; status: string }[];
-  fetched_at: string;
-}
+import { useEffect, useRef } from "react";
+import { useLiveScores, type ConnectionStatus } from "@/lib/use-live-scores";
+import type {
+  LiveMatch,
+  LiveScoreData as ScoreData,
+  LiveWinProbability as WinProbability,
+  LiveGamePlan as GamePlan,
+  LiveWeatherData as WeatherData,
+  LiveHistorySnapshot as HistorySnapshot,
+  LiveUpcomingMatch,
+  LiveRecentResult,
+} from "@/lib/types";
 
 // ---- Helpers ----
 
@@ -138,12 +71,6 @@ function getPhaseColor(phase?: string) {
   }
 }
 
-function timeAgo(isoString: string) {
-  const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  return `${Math.floor(diff / 3600)}h ago`;
-}
 
 // ---- Components ----
 
@@ -507,7 +434,7 @@ function WinProbChart({ match, history }: { match: LiveMatch; history: HistorySn
   );
 }
 
-function UpcomingMatchCard({ match }: { match: { team1: string; team2: string; datetime_gmt: string; status: string } }) {
+function UpcomingMatchCard({ match }: { match: LiveUpcomingMatch }) {
   return (
     <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
       <div>
@@ -523,7 +450,7 @@ function UpcomingMatchCard({ match }: { match: { team1: string; team2: string; d
   );
 }
 
-function ResultCard({ match }: { match: { team1: string; team2: string; team1_score: ScoreData; team2_score: ScoreData; status: string } }) {
+function ResultCard({ match }: { match: LiveRecentResult }) {
   return (
     <div className="p-3 bg-gray-800/30 rounded-lg">
       <div className="flex justify-between items-center">
@@ -556,25 +483,27 @@ function LoadingSkeleton() {
   );
 }
 
+// ---- Connection status badge ----
+
+const statusConfig: Record<ConnectionStatus, { label: string; color: string; Icon: typeof Wifi }> = {
+  connected: { label: "Live", color: "text-green-400 bg-green-500/10 border-green-500/30", Icon: Wifi },
+  connecting: { label: "Connecting...", color: "text-amber-400 bg-amber-500/10 border-amber-500/30", Icon: Wifi },
+  disconnected: { label: "Reconnecting...", color: "text-red-400 bg-red-500/10 border-red-500/30", Icon: WifiOff },
+  fallback: { label: "Polling", color: "text-blue-400 bg-blue-500/10 border-blue-500/30", Icon: Wifi },
+};
+
 // ---- Main Page ----
 
 export default function LivePage() {
-  const { data, isLoading, isError, dataUpdatedAt } = useQuery({
-    queryKey: ["live-scores"],
-    queryFn: fetchLiveScores,
-    refetchInterval: 30000,
-    refetchIntervalInBackground: true,
-  });
+  const { data: scores, status, clientCount } = useLiveScores();
 
-  const scores = data as LiveScoresResponse | undefined;
-  const liveMatches = scores?.live ?? [];
-  const upcoming = scores?.upcoming ?? [];
-  const results = scores?.recent_results ?? [];
+  const liveMatches = scores.live ?? [];
+  const upcoming = scores.upcoming ?? [];
+  const results = scores.recent_results ?? [];
   const hasLive = liveMatches.length > 0;
 
-  // Accumulate win probability history client-side across polls
+  // Accumulate win probability history client-side across WS updates
   const historyRef = useRef<Record<string, HistorySnapshot[]>>({});
-  const seededRef = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
     for (const match of liveMatches) {
@@ -584,8 +513,7 @@ export default function LivePage() {
 
       // Seed from server-side history on first load
       const serverHistory = match.history;
-      if (serverHistory?.length && !seededRef.current[id]) {
-        seededRef.current[id] = true;
+      if (serverHistory?.length) {
         for (const snap of serverHistory) {
           if (snap.win_probability && snap.current_score) {
             const alreadyHas = historyRef.current[id].some(
@@ -606,13 +534,16 @@ export default function LivePage() {
           current_score: match.current_score,
           innings: match.innings,
         });
-        // Cap at 60 snapshots to match server-side deque limit
         if (snapshots.length > 60) snapshots.splice(0, snapshots.length - 60);
       }
     }
   }, [liveMatches]);
 
-  if (isLoading) return <LoadingSkeleton />;
+  // Show skeleton only on initial load (no data yet and still connecting)
+  if (!scores.fetched_at && status === "connecting") return <LoadingSkeleton />;
+
+  const statusCfg = statusConfig[status];
+  const StatusIcon = statusCfg.Icon;
 
   return (
     <div className="space-y-6">
@@ -633,27 +564,27 @@ export default function LivePage() {
             Real-time scores, ML win probability, and tactical game plans
           </p>
         </div>
-        {dataUpdatedAt > 0 && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            Updated {timeAgo(new Date(dataUpdatedAt).toISOString())}
-            <span className="text-muted-foreground/50">| Auto-refresh 30s</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Connection status indicator */}
+          <span className={cn(
+            "flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border",
+            statusCfg.color,
+          )}>
+            <StatusIcon className="h-3 w-3" />
+            {statusCfg.label}
+          </span>
+          {scores.fetched_at && (
+            <span className="text-xs text-muted-foreground">
+              {timeAgo(scores.fetched_at)}
+            </span>
+          )}
+        </div>
       </div>
-
-      {isError && (
-        <Card className="border-red-500/30">
-          <CardContent className="p-4">
-            <p className="text-sm text-red-400">Failed to fetch live scores. Will retry automatically.</p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Live matches */}
       {hasLive ? (
         <div className="space-y-8">
-          {liveMatches.map((match) => (
+          {liveMatches.map((match: LiveMatch) => (
             <div key={match.match_id} className="space-y-4">
               <LiveMatchCard match={match} />
               <GamePlanPanel match={match} />

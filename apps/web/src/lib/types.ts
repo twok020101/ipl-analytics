@@ -344,3 +344,115 @@ export interface PlayerCompareResult {
   player1: PlayerCompareStats;
   player2: PlayerCompareStats;
 }
+
+// --- App user (shared between auth context and admin API) ---
+
+export type UserRole = "admin" | "analyst" | "viewer";
+
+export interface AppUser {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  organization_id: number | null;
+  organization_name: string | null;
+  is_active: boolean;
+  team_id: number | null;
+  team_name: string | null;
+}
+
+// --- Live match types (shared between hook and live page) ---
+
+export interface LiveScoreData {
+  runs: number;
+  wickets: number;
+  overs: number;
+}
+
+export interface LiveWinProbability {
+  [team: string]: number;
+}
+
+export interface LiveGamePlan {
+  win_probability?: Record<string, unknown>;
+  situation?: string;
+  projected_score?: number;
+  par_score?: number;
+  phase?: string;
+  chase_status?: string;
+  runs_needed?: number;
+  balls_remaining?: number;
+  required_rate?: number;
+  current_rate?: number;
+  batting_plan?: {
+    approach?: string;
+    advice?: string;
+    target_score?: number;
+    current_rr?: number;
+    required_rr_for_par?: number;
+  };
+  bowling_plan?: {
+    advice?: string;
+    dot_ball_target?: string;
+    priority?: string;
+  };
+  weather_impact?: string;
+}
+
+export interface LiveWeatherData {
+  available: boolean;
+  city?: string;
+  temperature?: number;
+  humidity?: number;
+  dew_point?: number;
+  dew_factor?: string;
+  precipitation_mm?: number;
+  rain_risk?: string;
+  wind_speed_kmh?: number;
+  cloud_cover_pct?: number;
+  impact?: string[];
+  toss_recommendation_adjustment?: string | null;
+}
+
+export interface LiveHistorySnapshot {
+  timestamp: string;
+  win_probability?: LiveWinProbability;
+  current_score?: LiveScoreData;
+  innings?: number;
+}
+
+export interface LiveMatch {
+  match_id: string;
+  team1: string;
+  team2: string;
+  status: string;
+  state: string;
+  innings?: number;
+  batting_team?: string;
+  bowling_team?: string;
+  current_score?: LiveScoreData;
+  target?: number;
+  first_innings_score?: LiveScoreData;
+  win_probability?: LiveWinProbability;
+  prediction_details?: Record<string, unknown>;
+  game_plan?: LiveGamePlan;
+  weather?: LiveWeatherData;
+  history?: LiveHistorySnapshot[];
+}
+
+export interface LiveUpcomingMatch {
+  match_id: string;
+  team1: string;
+  team2: string;
+  datetime_gmt: string;
+  status: string;
+}
+
+export interface LiveRecentResult {
+  match_id: string;
+  team1: string;
+  team2: string;
+  team1_score: LiveScoreData;
+  team2_score: LiveScoreData;
+  status: string;
+}

@@ -24,7 +24,7 @@ from typing import Optional
 import joblib
 import numpy as np
 
-from app.config import MODEL_DIR
+from app.config import MODEL_DIR, CURRENT_SEASON
 from app.services.cricapi_utils import parse_score, extract_team_short
 from app.services.weather import fetch_weather, VENUE_COORDS
 from app.services.game_plan_live import recalculate_game_plan
@@ -58,6 +58,9 @@ def _get_ml_models():
 # In-memory state for tracked matches
 _tracked_matches: dict = {}
 
+# Cache cricapi_id → DB match_id to avoid a SELECT per snapshot persist
+_cricapi_to_db_id: dict = {}
+
 
 def init_tracker(api_key: str):
     """Initialize tracker with API key."""
@@ -84,7 +87,7 @@ def _is_match_window() -> bool:
         db = SessionLocal()
         try:
             matches = db.query(Match).filter(
-                Match.season == "2026",
+                Match.season == CURRENT_SEASON,
                 Match.match_ended == False,
                 Match.datetime_gmt.isnot(None),
             ).all()
@@ -451,13 +454,78 @@ _match_history: dict = {}  # match_id -> deque of snapshots (max 60)
 
 
 def record_snapshot(match_id: str, state: dict):
-    """Record a score snapshot for tracking game plan changes."""
+    """Record a score snapshot in-memory and persist to DB for post-match analysis.
+
+    In-memory deque is used for quick access during live matches.
+    DB persistence (LiveSnapshot) enables post-match win probability replay.
+    """
+    now = datetime.now(timezone.utc)
+
+    # In-memory cache for live access
     if match_id not in _match_history:
         _match_history[match_id] = deque(maxlen=60)
     _match_history[match_id].append({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": now.isoformat(),
         **state,
     })
+
+    # Persist to database for post-match analysis
+    _persist_snapshot_to_db(match_id, state, now)
+
+
+def _persist_snapshot_to_db(match_id: str, state: dict, timestamp: datetime):
+    """Save snapshot to LiveSnapshot table for post-match win prob curves.
+
+    Uses _cricapi_to_db_id cache to avoid a SELECT on every snapshot.
+    """
+    try:
+        from app.database import SessionLocal
+        from app.models.models import LiveSnapshot, Match
+
+        # Resolve DB match_id, using cache to avoid repeated SELECTs
+        db_match_id = _cricapi_to_db_id.get(match_id)
+
+        db = SessionLocal()
+        try:
+            if not db_match_id:
+                db_match = db.query(Match).filter(Match.cricapi_id == match_id).first()
+                if not db_match:
+                    return
+                db_match_id = db_match.id
+                _cricapi_to_db_id[match_id] = db_match_id
+
+            innings = state.get("innings")
+            score = state.get("current_score", {})
+            win_prob = state.get("win_probability", {})
+            batting_team = state.get("batting_team")
+            bowling_team = state.get("bowling_team")
+
+            if innings is None:
+                return
+
+            snapshot = LiveSnapshot(
+                match_id=db_match_id,
+                cricapi_match_id=match_id,
+                timestamp=timestamp,
+                innings=innings,
+                batting_team=batting_team,
+                bowling_team=bowling_team,
+                runs=score.get("runs", 0),
+                wickets=score.get("wickets", 0),
+                overs=score.get("overs", 0.0),
+                target=state.get("target"),
+                win_prob_batting=win_prob.get(batting_team),
+                win_prob_bowling=win_prob.get(bowling_team),
+            )
+            db.add(snapshot)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug(f"Snapshot persist failed: {e}")
+        finally:
+            db.close()
+    except Exception:
+        pass  # Don't let persistence failures break live tracking
 
 
 def get_match_history(match_id: str) -> list:
@@ -481,3 +549,54 @@ async def poll_and_update() -> list:
             live_states.append(state)
 
     return live_states
+
+
+async def build_scores_payload() -> dict:
+    """Build the full live scores payload used by both REST and WebSocket.
+
+    Returns a dict with live, upcoming, recent_results, and fetched_at fields.
+    Shared between GET /live/scores and the WS manager's poll loop to
+    avoid duplicating the match-categorization logic.
+    """
+    matches = await fetch_live_scores()
+
+    live_states = []
+    upcoming = []
+    results = []
+
+    for m in matches:
+        if m["match_state"] == "live":
+            state = await build_live_match_state(m)
+            score = state.get("current_score")
+            prev = get_match_history(m["id"])
+            if score and (not prev or prev[-1].get("current_score") != score):
+                record_snapshot(m["id"], state)
+            live_states.append(state)
+        elif m["match_state"] == "fixture":
+            upcoming.append({
+                "match_id": m["id"],
+                "team1": m["team1"],
+                "team2": m["team2"],
+                "datetime_gmt": m["datetime_gmt"],
+                "status": m["status"],
+            })
+        elif m["match_state"] == "result":
+            results.append({
+                "match_id": m["id"],
+                "team1": m["team1"],
+                "team2": m["team2"],
+                "team1_score": m["team1_score"],
+                "team2_score": m["team2_score"],
+                "status": m["status"],
+            })
+
+    for state in live_states:
+        mid = state.get("match_id")
+        state["history"] = get_match_history(mid) if mid else []
+
+    return {
+        "live": live_states,
+        "upcoming": upcoming[:5],
+        "recent_results": results[:5],
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }

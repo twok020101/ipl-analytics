@@ -6,7 +6,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
@@ -78,6 +78,12 @@ def _run_schema_migrations():
         if "img" not in team_cols:
             stmts.append("ALTER TABLE teams ADD COLUMN img VARCHAR(500)")
 
+    # organizations — add team_id for multi-team dashboard scoping
+    org_cols = _get_cols("organizations")
+    if org_cols:
+        if "team_id" not in org_cols:
+            stmts.append("ALTER TABLE organizations ADD COLUMN team_id INTEGER REFERENCES teams(id)")
+
     if stmts:
         with engine.begin() as conn:
             for s in stmts:
@@ -104,12 +110,17 @@ async def lifespan(app: FastAPI):
         _run_schema_migrations()
         print(f"Database loaded from {DB_PATH}")
 
-    # Start background match sync task (every 5 minutes)
+    # Start background match sync task (daily at 2 AM IST)
     sync_task = asyncio.create_task(_match_sync_loop())
+
+    # Start WebSocket live score broadcaster (polls CricAPI, pushes to WS clients)
+    from app.services.ws_manager import manager as ws_manager
+    await ws_manager.start_polling()
 
     yield
 
     # Shutdown
+    await ws_manager.stop_polling()
     sync_task.cancel()
 
 
@@ -203,6 +214,38 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(live_router, prefix="/api/v1")
 app.include_router(viz_router, prefix="/api/v1")
 app.include_router(cron_router, prefix="/api/v1")
+
+
+# ---------------------------------------------------------------------------
+# WebSocket endpoint — real-time live score push
+# ---------------------------------------------------------------------------
+
+@app.websocket("/ws/live")
+async def websocket_live_scores(ws: WebSocket):
+    """WebSocket endpoint for real-time live score updates.
+
+    Clients connect here and receive JSON payloads every ~30 seconds with:
+      - Live match states (scores, win probability, game plans)
+      - Upcoming fixtures
+      - Recent results
+
+    Connection is kept alive with the polling loop in ws_manager.
+    Auto-reconnect should be handled client-side.
+    """
+    from app.services.ws_manager import manager as ws_manager
+
+    await ws_manager.connect(ws)
+    try:
+        # Keep connection open — listen for client messages (e.g., ping)
+        while True:
+            data = await ws.receive_text()
+            # Client can send "ping" to keep alive; we respond with "pong"
+            if data == "ping":
+                await ws.send_text("pong")
+    except WebSocketDisconnect:
+        ws_manager.disconnect(ws)
+    except Exception:
+        ws_manager.disconnect(ws)
 
 
 @app.get("/health")
