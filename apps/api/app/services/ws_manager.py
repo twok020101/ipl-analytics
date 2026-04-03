@@ -53,7 +53,7 @@ class LiveScoreManager:
         """Accept a new WebSocket connection and send cached state."""
         await ws.accept()
         self._connections.add(ws)
-        logger.info(f"WS client connected ({self.connection_count} total)")
+        print(f"WS client connected ({self.connection_count} total)")
 
         # Send latest state immediately so client doesn't wait for next poll
         if self._latest_state:
@@ -65,7 +65,7 @@ class LiveScoreManager:
     def disconnect(self, ws: WebSocket):
         """Remove a disconnected client."""
         self._connections.discard(ws)
-        logger.info(f"WS client disconnected ({self.connection_count} total)")
+        print(f"WS client disconnected ({self.connection_count} total)")
 
     async def broadcast(self, data: dict):
         """Send data to all connected clients, removing dead connections."""
@@ -92,7 +92,7 @@ class LiveScoreManager:
             return  # Already running
 
         self._poll_task = asyncio.create_task(self._poll_loop())
-        logger.info("WS live score polling started")
+        print("WS live score polling started")
 
     async def stop_polling(self):
         """Stop the background polling loop."""
@@ -102,7 +102,7 @@ class LiveScoreManager:
                 await self._poll_task
             except asyncio.CancelledError:
                 pass
-        logger.info("WS live score polling stopped")
+        print("WS live score polling stopped")
 
     @staticmethod
     def _score_fingerprint(payload: dict) -> str:
@@ -143,9 +143,9 @@ class LiveScoreManager:
 
         while True:
             try:
-                logger.info(f"WS poll tick (manager id={id(self)}) — {self.connection_count} client(s) connected, fetching scores...")
+                print(f"WS poll tick (manager id={id(self)}) — {self.connection_count} client(s) connected, fetching scores...")
                 if self._connections:
-                    logger.info(f"WS poll tick (manager id={id(self)}) — {self.connection_count} client(s) connected, fetching scores...")
+                    print(f"WS poll tick (manager id={id(self)}) — {self.connection_count} client(s) connected, fetching scores...")
                     # Reuses the same payload builder as GET /live/scores
                     payload = await build_scores_payload()
                     fingerprint = self._score_fingerprint(payload)
@@ -156,13 +156,13 @@ class LiveScoreManager:
                         payload["type"] = "live_update"
                         payload["clients"] = self.connection_count
                         await self.broadcast(payload)
-                        logger.info(
+                        print(
                             f"Score change detected — broadcast to {self.connection_count} clients"
                         )
                     else:
                         logger.debug("No score change, skipping broadcast")
                 else:
-                    logger.info(f"WS poll tick (manager id={id(self)}) — no clients connected, skipping")
+                    print(f"WS poll tick (manager id={id(self)}) — no clients connected, skipping")
 
                 await asyncio.sleep(POLL_INTERVAL)
 
