@@ -6,8 +6,10 @@ Call after every match completes or periodically to keep data fresh.
 
 import logging
 import re
+from datetime import date, timedelta
 
 import httpx
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
@@ -71,14 +73,19 @@ async def sync_results(db: Session) -> dict:
             db_match = db.query(Match).filter(Match.cricapi_id == cricapi_id).first()
 
         if not db_match:
+            # Fallback: match by team pair, but restrict to matches within
+            # 2 days of today to avoid writing results onto future fixtures
+            # between the same two teams.
+            cutoff = date.today() + timedelta(days=2)
             db_match = db.query(Match).filter(
                 Match.season == "2026",
                 Match.winner_id.is_(None),
+                Match.date <= cutoff,
                 or_(
                     (Match.team1_id == team1.id) & (Match.team2_id == team2.id),
                     (Match.team1_id == team2.id) & (Match.team2_id == team1.id),
                 ),
-            ).first()
+            ).order_by(Match.date.desc()).first()
 
         if not db_match:
             continue
@@ -145,7 +152,11 @@ async def sync_results(db: Session) -> dict:
 
         updated_db.append(f"{t1_short} vs {t2_short}: {status}")
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logging.warning("Duplicate match skipped during result sync (unique constraint)")
 
     return {
         "db_updated": updated_db,

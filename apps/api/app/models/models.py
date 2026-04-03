@@ -182,6 +182,10 @@ class Match(Base):
     player_of_match = relationship("Player", foreign_keys=[player_of_match_id])
     deliveries = relationship("Delivery", back_populates="match")
 
+    __table_args__ = (
+        UniqueConstraint("season", "team1_id", "team2_id", "date", name="uq_matches_season_teams_date"),
+    )
+
 
 class Delivery(Base):
     __tablename__ = "deliveries"

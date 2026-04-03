@@ -1,10 +1,15 @@
 """CricAPI integration for fetching live IPL data — writes to DB, not JSON."""
 
+import logging
+
 import httpx
 from datetime import date
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.models.models import Team, Player, Match, Venue, SquadMember
@@ -222,7 +227,11 @@ async def refresh_ipl2026_data(db: Session) -> dict:
             'matchEnded': m.get('matchEnded', False),
         })
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        logger.warning("Duplicate match skipped during fixture sync (unique constraint)")
 
     return {
         'series': {
