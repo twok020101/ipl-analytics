@@ -7,14 +7,12 @@ and live in-match strategy adjustments based on historical ball-by-ball data.
 All strategies respect official IPL 2026 playing rules.
 """
 
-import json
-from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case, and_, or_, cast, Integer, Float
 
-from app.config import DATA_DIR
+from app.services.squad_service import get_squad_data, get_player_meta
 from app.models.models import (
     Team,
     Player,
@@ -96,33 +94,14 @@ PLAYING_XI_SIZE = IPL_RULES["PLAYING_XI_SIZE"]
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_squad_data() -> dict:
-    """Load team_squads_2026.json mapping team short_name -> player_ids."""
-    path = DATA_DIR / "team_squads_2026.json"
-    with open(path) as f:
-        return json.load(f)
+def _load_squad_data(db: Session) -> dict:
+    """Get squad data from DB."""
+    return get_squad_data(db)
 
 
-def _load_ipl2026_data() -> dict:
-    """Load ipl2026.json with full player metadata (country, role, etc.)."""
-    path = DATA_DIR / "ipl2026.json"
-    with open(path) as f:
-        return json.load(f)
-
-
-def _build_name_to_meta() -> Dict[str, dict]:
-    """Build a mapping from player name -> {country, role, ...} from ipl2026.json."""
-    data = _load_ipl2026_data()
-    mapping: Dict[str, dict] = {}
-    for _team_key, team_data in data.get("squads", {}).items():
-        for p in team_data.get("players", []):
-            mapping[p["name"]] = {
-                "country": p.get("country", "India"),
-                "role": p.get("role", "Unknown"),
-                "batting_style": p.get("battingStyle", ""),
-                "bowling_style": p.get("bowlingStyle", ""),
-            }
-    return mapping
+def _build_name_to_meta(db: Session) -> Dict[str, dict]:
+    """Build player name -> {country, role, batting_style, bowling_style} from DB."""
+    return get_player_meta(db)
 
 
 def _is_overseas(country: str) -> bool:
@@ -418,8 +397,8 @@ def select_playing_11(
     - Maximum 4 overseas players
     - At least 5 specialist batters (incl WK), at least 4 specialist bowlers
     """
-    squad_data = _load_squad_data()
-    name_meta = _build_name_to_meta()
+    squad_data = _load_squad_data(db)
+    name_meta = _build_name_to_meta(db)
 
     if team_short_name not in squad_data:
         return {"error": f"Team {team_short_name} not found in squad data"}
@@ -790,7 +769,7 @@ def recommend_toss_decision(
     spin_pct = round(spin_wickets_q / max(total_venue_wickets, 1) * 100, 1)
 
     # --- Team analysis ---
-    squad_data = _load_squad_data()
+    squad_data = _load_squad_data(db)
     team_id = squad_data.get(team_short_name, {}).get("team_id")
     opp_id = squad_data.get(opposition_short_name, {}).get("team_id")
 
@@ -959,7 +938,7 @@ def create_game_plan(
     Create a complete over-by-over game plan including batting order,
     bowling plan, and key matchups.
     """
-    name_meta = _build_name_to_meta()
+    name_meta = _build_name_to_meta(db)
 
     # --- Build profiles for our players ---
     our_players = []
@@ -1378,7 +1357,7 @@ def live_game_plan_update(
     Adjusts game plan based on current match situation.
     Compares to venue par score and recommends strategy changes.
     """
-    name_meta = _build_name_to_meta()
+    name_meta = _build_name_to_meta(db)
 
     # Parse current_over: e.g., 10.3 means 10 overs and 3 balls
     overs_completed = int(current_over)

@@ -2,13 +2,13 @@
 Fix player ID mapping between CricAPI 2026 squad data and historical IPL database.
 
 Problem: ipl2026.json uses full names (e.g., "Rohit Sharma") while historical DB
-uses initials (e.g., "RG Sharma"). The team_squads_2026.json points to newly
+uses initials (e.g., "RG Sharma"). The squad_members table may point to newly
 created player IDs with NO historical data.
 
 This script:
 1. Matches CricAPI players to their historical counterparts
 2. Updates historical player records with CricAPI metadata (role, styles)
-3. Rewrites team_squads_2026.json to use historical player IDs
+3. Updates squad_members to use historical player IDs
 
 Usage:
     cd /Users/twok/Projects/dataset/apps/api
@@ -16,12 +16,15 @@ Usage:
 """
 
 import json
-import sqlite3
 from pathlib import Path
 from typing import Optional, Tuple
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-DB_PATH = Path(__file__).resolve().parents[2] / "ipl_analytics.db"
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from app.database import SessionLocal
+from app.models.models import Player, SquadMember, Team
+from app.config import DATA_DIR
 
 # -----------------------------------------------------------------------
 # Verified explicit mappings: CricAPI full_name -> historical DB player_id
@@ -94,36 +97,22 @@ DO_NOT_REMAP = {
 }
 
 
-def get_connection():
-    return sqlite3.connect(str(DB_PATH))
-
-
 def load_ipl2026():
     with open(DATA_DIR / "ipl2026.json") as f:
         return json.load(f)
 
 
-def load_squads():
-    with open(DATA_DIR / "team_squads_2026.json") as f:
-        return json.load(f)
-
-
-def save_squads(data):
-    with open(DATA_DIR / "team_squads_2026.json", "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def get_delivery_count(conn, player_id: int) -> int:
+def get_delivery_count(db: Session, player_id: int) -> int:
     """Count deliveries where this player appears as batter or bowler."""
-    r = conn.execute(
-        "SELECT COUNT(*) FROM deliveries WHERE batter_id=? OR bowler_id=?",
-        (player_id, player_id),
+    r = db.execute(
+        text("SELECT COUNT(*) FROM deliveries WHERE batter_id=:pid OR bowler_id=:pid"),
+        {"pid": player_id},
     ).fetchone()
     return r[0] if r else 0
 
 
 def find_historical_player(
-    conn, full_name: str, role: str = "", batting_style: str = "", bowling_style: str = ""
+    db: Session, full_name: str, role: str = "", batting_style: str = "", bowling_style: str = ""
 ) -> Optional[Tuple[int, str, int]]:
     """
     Find the historical player ID matching a CricAPI full name.
@@ -134,19 +123,19 @@ def find_historical_player(
     # ------------------------------------------------------------------
     if full_name in EXPLICIT_MAPPING:
         pid = EXPLICIT_MAPPING[full_name]
-        row = conn.execute("SELECT id, name FROM players WHERE id=?", (pid,)).fetchone()
+        row = db.execute(text("SELECT id, name FROM players WHERE id=:pid"), {"pid": pid}).fetchone()
         if row:
-            dc = get_delivery_count(conn, pid)
+            dc = get_delivery_count(db, pid)
             return (row[0], row[1], dc)
 
     # ------------------------------------------------------------------
     # Step 1: Check if the full name already exists exactly in the DB
     # ------------------------------------------------------------------
-    row = conn.execute(
-        "SELECT id, name FROM players WHERE name = ?", (full_name,)
+    row = db.execute(
+        text("SELECT id, name FROM players WHERE name = :name"), {"name": full_name}
     ).fetchone()
     if row:
-        dc = get_delivery_count(conn, row[0])
+        dc = get_delivery_count(db, row[0])
         if dc > 50:
             return (row[0], row[1], dc)
 
@@ -162,24 +151,24 @@ def find_historical_player(
     first_initial = first_name[0].upper()
 
     # Search for last name match
-    candidates = conn.execute(
-        "SELECT id, name, role FROM players WHERE name LIKE ? AND name != ?",
-        (f"%{last_name}", full_name),
+    candidates = db.execute(
+        text("SELECT id, name, role FROM players WHERE name LIKE :pattern AND name != :name"),
+        {"pattern": f"%{last_name}", "name": full_name},
     ).fetchall()
 
     # Also search with multi-word last name (for names like "de Kock", "Salam Dar")
     if not candidates and len(parts) > 2:
         search_term = " ".join(parts[1:])
-        candidates = conn.execute(
-            "SELECT id, name, role FROM players WHERE name LIKE ? AND name != ?",
-            (f"%{search_term}", full_name),
+        candidates = db.execute(
+            text("SELECT id, name, role FROM players WHERE name LIKE :pattern AND name != :name"),
+            {"pattern": f"%{search_term}", "name": full_name},
         ).fetchall()
 
     best = None
     best_dc = 0
 
     for cid, cname, crole in candidates:
-        dc = get_delivery_count(conn, cid)
+        dc = get_delivery_count(db, cid)
         if dc < 10:
             continue
 
@@ -216,7 +205,7 @@ def find_historical_player(
     # Step 3: Try the exact name match even with low delivery count
     # ------------------------------------------------------------------
     if row:
-        dc = get_delivery_count(conn, row[0])
+        dc = get_delivery_count(db, row[0])
         if dc > 0:
             return (row[0], row[1], dc)
 
@@ -224,9 +213,8 @@ def find_historical_player(
 
 
 def run():
-    conn = get_connection()
+    db = SessionLocal()
     ipl2026 = load_ipl2026()
-    squads = load_squads()
 
     # Track results
     mapped = []
@@ -234,95 +222,95 @@ def run():
     already_ok = []
     updated_metadata = []
 
-    # New squads dict to write back
-    new_squads = {}
-
     for team_code, team_data in ipl2026.get("squads", {}).items():
         players = team_data.get("players", [])
-        squad_info = squads.get(team_code, {})
-        old_ids = squad_info.get("player_ids", [])
-        new_ids = []
+
+        # Get team
+        team = db.query(Team).filter(Team.short_name == team_code).first()
+        if not team:
+            print(f"  Team {team_code} not found in DB, skipping")
+            continue
+
+        # Get current squad member IDs for this team
+        current_members = (
+            db.query(SquadMember)
+            .filter(SquadMember.team_id == team.id, SquadMember.season == "2026")
+            .all()
+        )
+        member_by_player_id = {m.player_id: m for m in current_members}
 
         print(f"\n{'='*60}")
         print(f"  {team_code} - {team_data.get('name', '')}")
         print(f"{'='*60}")
 
-        for i, player in enumerate(players):
-            cricapi_id = old_ids[i] if i < len(old_ids) else None
-            name = player["name"]
-            role = player.get("role", "")
-            batting_style = player.get("battingStyle", "")
-            bowling_style = player.get("bowlingStyle", "")
+        for player_data in players:
+            name = player_data["name"]
+            role = player_data.get("role", "")
+            batting_style = player_data.get("battingStyle", "")
+            bowling_style = player_data.get("bowlingStyle", "")
+
+            # Find the current player record for this name
+            current_player = db.query(Player).filter(Player.name == name).first()
+            if not current_player:
+                not_found.append((name, team_code, "not_in_db"))
+                print(f"  ??? {name:30s} (not in DB)")
+                continue
+
+            cricapi_id = current_player.id
 
             # Check if this ID already has historical data (>50 deliveries)
-            if cricapi_id is not None:
-                dc = get_delivery_count(conn, cricapi_id)
-                if dc > 50:
-                    # Already pointing to a player with data - keep it
-                    new_ids.append(cricapi_id)
-                    db_name = conn.execute(
-                        "SELECT name FROM players WHERE id=?", (cricapi_id,)
-                    ).fetchone()
-                    already_ok.append((name, cricapi_id, db_name[0] if db_name else "??", dc))
-                    print(f"  OK  {name:30s} -> id={cricapi_id:4d} ({dc} deliveries)")
-                    continue
+            dc = get_delivery_count(db, cricapi_id)
+            if dc > 50:
+                already_ok.append((name, cricapi_id, name, dc))
+                print(f"  OK  {name:30s} -> id={cricapi_id:4d} ({dc} deliveries)")
+                continue
 
             # Skip players that should not be remapped
             if name in DO_NOT_REMAP:
-                new_ids.append(cricapi_id)
                 not_found.append((name, team_code, "skip"))
                 print(f"  SKIP {name:30s} -> id={cricapi_id:4d} (no remap)")
                 continue
 
             # Try to find historical match
-            result = find_historical_player(conn, name, role, batting_style, bowling_style)
+            result = find_historical_player(db, name, role, batting_style, bowling_style)
 
             if result:
                 hist_id, hist_name, dc = result
-                new_ids.append(hist_id)
                 mapped.append((name, cricapi_id, hist_id, hist_name, dc))
                 print(f"  MAP {name:30s} -> id={hist_id:4d} ({hist_name}, {dc} deliveries)")
 
                 # Update historical player record with CricAPI metadata
-                existing = conn.execute(
-                    "SELECT role, batting_style, bowling_style FROM players WHERE id=?",
-                    (hist_id,),
-                ).fetchone()
-                updates = []
-                params = []
-                if existing:
-                    if not existing[0] and role:
-                        updates.append("role=?")
-                        params.append(role)
-                    if not existing[1] and batting_style:
-                        updates.append("batting_style=?")
-                        params.append(batting_style)
-                    if not existing[2] and bowling_style:
-                        updates.append("bowling_style=?")
-                        params.append(bowling_style)
+                hist_player = db.query(Player).get(hist_id)
+                if hist_player:
+                    if not hist_player.role and role:
+                        hist_player.role = role
+                    if not hist_player.batting_style and batting_style:
+                        hist_player.batting_style = batting_style
+                    if not hist_player.bowling_style and bowling_style:
+                        hist_player.bowling_style = bowling_style
+                    if not hist_player.country and player_data.get("country"):
+                        hist_player.country = player_data["country"]
+                    updated_metadata.append((hist_name, hist_id))
 
-                    if updates:
-                        params.append(hist_id)
-                        conn.execute(
-                            f"UPDATE players SET {', '.join(updates)} WHERE id=?",
-                            params,
-                        )
-                        updated_metadata.append((hist_name, hist_id, updates))
+                # Update squad_members to point to historical player
+                sm = member_by_player_id.get(cricapi_id)
+                if sm and hist_id != cricapi_id:
+                    # Check if hist_id already has a squad membership
+                    existing_hist_sm = db.query(SquadMember).filter(
+                        SquadMember.team_id == team.id,
+                        SquadMember.player_id == hist_id,
+                        SquadMember.season == "2026",
+                    ).first()
+                    if existing_hist_sm:
+                        # Already exists, delete the duplicate
+                        db.delete(sm)
+                    else:
+                        sm.player_id = hist_id
             else:
-                new_ids.append(cricapi_id)
                 not_found.append((name, team_code, "no_match"))
                 print(f"  ??? {name:30s} -> id={cricapi_id:4d} (no historical match found)")
 
-        new_squads[team_code] = {
-            "team_id": squad_info.get("team_id"),
-            "team_name": squad_info.get("team_name", team_data.get("name", "")),
-            "player_ids": new_ids,
-        }
-
-    conn.commit()
-
-    # Save updated squads
-    save_squads(new_squads)
+    db.commit()
 
     # Print report
     print(f"\n{'='*60}")
@@ -343,13 +331,8 @@ def run():
         for name, team, reason in not_found:
             print(f"    {name:30s}  [{team}] ({reason})")
 
-    if updated_metadata:
-        print(f"\n  --- Metadata Updated ---")
-        for hist_name, hist_id, updates in updated_metadata:
-            print(f"    {hist_name:30s}  id={hist_id:4d}  fields={updates}")
-
-    conn.close()
-    print(f"\n  Done. team_squads_2026.json has been updated.")
+    db.close()
+    print(f"\n  Done. squad_members table has been updated.")
 
 
 if __name__ == "__main__":

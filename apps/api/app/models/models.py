@@ -113,9 +113,11 @@ class Team(Base):
     name = Column(String(100), unique=True, nullable=False)
     short_name = Column(String(10), nullable=True)
     is_active = Column(Boolean, default=True)
+    img = Column(String(500), nullable=True)
 
     home_matches = relationship("Match", foreign_keys="Match.team1_id", back_populates="team1")
     away_matches = relationship("Match", foreign_keys="Match.team2_id", back_populates="team2")
+    squad_members = relationship("SquadMember", back_populates="team")
 
 
 class Player(Base):
@@ -126,6 +128,8 @@ class Player(Base):
     role = Column(String(50), nullable=True)  # kept as String — CricAPI sends varied role strings
     batting_style = Column(String(50), nullable=True)
     bowling_style = Column(String(80), nullable=True)
+    country = Column(String(100), nullable=True)
+    player_img = Column(String(500), nullable=True)
 
     batting_stats = relationship("PlayerSeasonBatting", back_populates="player")
     bowling_stats = relationship("PlayerSeasonBowling", back_populates="player")
@@ -147,7 +151,9 @@ class Match(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_match_id = Column(Integer, unique=True, nullable=False, index=True)
+    cricapi_id = Column(String(50), unique=True, nullable=True, index=True)
     date = Column(Date, nullable=True)
+    datetime_gmt = Column(String(50), nullable=True)
     season = Column(String(20), nullable=True)
     stage = Column(String(50), nullable=True)  # kept as String — CSV has "Unknown", "League", etc.
     venue_id = Column(Integer, ForeignKey("venues.id"), nullable=True)
@@ -160,6 +166,9 @@ class Match(Base):
     win_type = Column(String(20), nullable=True)  # "runs" / "wickets"
     player_of_match_id = Column(Integer, ForeignKey("players.id"), nullable=True)
     method = Column(String(20), nullable=True)  # DLS, etc.
+    match_started = Column(Boolean, default=False)
+    match_ended = Column(Boolean, default=False)
+    status_text = Column(String(300), nullable=True)
     first_innings_score = Column(Integer, nullable=True)
     first_innings_overs = Column(Float, nullable=True)
     second_innings_score = Column(Integer, nullable=True)
@@ -285,6 +294,24 @@ class BatterVsBowler(Base):
         UniqueConstraint("batter_id", "bowler_id", name="uq_batter_bowler"),
         Index("ix_bvb_batter", "batter_id"),
         Index("ix_bvb_bowler", "bowler_id"),
+    )
+
+
+class SquadMember(Base):
+    __tablename__ = "squad_members"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    season = Column(String(20), nullable=False)
+    is_captain = Column(Boolean, default=False)
+
+    team = relationship("Team", back_populates="squad_members")
+    player = relationship("Player")
+
+    __table_args__ = (
+        UniqueConstraint("team_id", "player_id", "season", name="uq_squad_member"),
+        Index("ix_squad_team_season", "team_id", "season"),
     )
 
 

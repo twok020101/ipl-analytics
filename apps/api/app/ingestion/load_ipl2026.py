@@ -1,26 +1,27 @@
 """Ingest IPL 2026 data from CricAPI cache into the database.
 
 Adds:
-- New players with role/batting_style/bowling_style from squad data
-- Enriches existing players with missing role/style info
+- New players with role/batting_style/bowling_style/country from squad data
+- Enriches existing players with missing role/style/country info
 - Adds new venues from fixture data
 - Adds IPL 2026 fixtures as Match records (season='2026')
-- Creates a team_squad mapping table for current squad membership
+- Creates squad_members records for team squad membership
 
 Run: python -m app.ingestion.load_ipl2026
 """
 
 import json
-import re
 from datetime import date
 from pathlib import Path
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import engine, Base, SessionLocal
-from app.models.models import Team, Player, Venue, Match, VenueStats
+from app.models.models import Team, Player, Venue, Match, VenueStats, SquadMember
 from app.ingestion.team_mappings import TEAM_NAME_MAP, TEAM_SHORT_NAMES
+from app.services.db_helpers import (
+    find_or_create_team, find_or_create_player, find_or_create_venue, stable_source_id,
+)
 
 
 DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "ipl2026.json"
@@ -31,110 +32,16 @@ def _normalize_team(name: str) -> str:
     return TEAM_NAME_MAP.get(name, name)
 
 
-def _find_or_create_team(db: Session, short_name: str, full_name: str) -> Team:
-    """Find team by short_name or create."""
-    team = db.query(Team).filter(Team.short_name == short_name).first()
-    if team:
-        return team
-    # Try by name
-    canonical = _normalize_team(full_name)
-    team = db.query(Team).filter(Team.name == canonical).first()
-    if team:
-        if not team.short_name:
-            team.short_name = short_name
-        return team
-    # Create new
-    team = Team(name=canonical, short_name=short_name, is_active=True)
-    db.add(team)
-    db.flush()
-    return team
-
-
-def _find_or_create_venue(db: Session, venue_str: str) -> Venue:
-    """Find venue by name or create. Handles slight name variations."""
-    if not venue_str:
-        return None
-
-    # Try exact match first
-    venue = db.query(Venue).filter(Venue.name == venue_str).first()
-    if venue:
-        return venue
-
-    # Extract city from "Stadium Name, City" format
-    parts = venue_str.rsplit(", ", 1)
-    city = parts[-1] if len(parts) > 1 else None
-
-    # Try fuzzy match by checking if existing venue name is contained
-    all_venues = db.query(Venue).all()
-    for v in all_venues:
-        # Match by key words
-        v_lower = v.name.lower()
-        new_lower = venue_str.lower()
-        if v_lower in new_lower or new_lower in v_lower:
-            return v
-        # Match by stadium name stem (e.g. "Chinnaswamy")
-        v_words = set(re.findall(r'\b\w{5,}\b', v_lower))
-        new_words = set(re.findall(r'\b\w{5,}\b', new_lower))
-        if v_words & new_words and len(v_words & new_words) >= 1:
-            return v
-
-    # Create new venue
-    venue = Venue(name=venue_str, city=city)
-    db.add(venue)
-    db.flush()
-    return venue
-
-
-def _find_or_create_player(db: Session, player_data: dict) -> Player:
-    """Find player by name or create with CricAPI metadata."""
-    name = player_data["name"]
-    player = db.query(Player).filter(Player.name == name).first()
-
-    role = player_data.get("role")
-    batting_style = player_data.get("battingStyle")
-    bowling_style = player_data.get("bowlingStyle")
-
-    if player:
-        # Enrich existing player with missing info
-        updated = False
-        if not player.role and role:
-            player.role = role
-            updated = True
-        if not player.batting_style and batting_style:
-            player.batting_style = batting_style
-            updated = True
-        if not player.bowling_style and bowling_style:
-            player.bowling_style = bowling_style
-            updated = True
-        if updated:
-            db.flush()
-        return player
-
-    # Create new player
-    player = Player(
-        name=name,
-        role=role,
-        batting_style=batting_style,
-        bowling_style=bowling_style,
-    )
-    db.add(player)
-    db.flush()
-    return player
-
-
 def _parse_result(status: str):
     """Parse match result from status string like 'CSK won by 6 wkts'."""
     if not status:
         return None, None, None
-
-    # "Team Name won by X runs/wkts"
     match = re.match(r"(.+?) won by (\d+) (run|wkt|wicket)", status, re.IGNORECASE)
     if match:
         winner_name = match.group(1).strip()
         margin = int(match.group(2))
         win_type = "wickets" if "wkt" in match.group(3).lower() or "wicket" in match.group(3).lower() else "runs"
         return winner_name, margin, win_type
-
     return None, None, None
 
 
@@ -163,55 +70,82 @@ def run_ingestion():
         print(f"  Squads: {len(squads)} teams")
         print(f"  Fixtures: {len(fixtures)} matches")
 
-        # 1. Process squads — add/enrich players
-        team_squad_map = {}  # short_name -> [player_ids]
+        # 1. Process squads — add/enrich players + create squad memberships
         players_added = 0
         players_enriched = 0
+        squad_members_added = 0
 
         for short_name, squad in squads.items():
-            team = _find_or_create_team(db, short_name, squad["name"])
+            team = find_or_create_team(db, short_name, _normalize_team(squad["name"]))
             team.is_active = True
-            player_ids = []
+            if squad.get("img") and not team.img:
+                team.img = squad["img"]
 
             for p_data in squad.get("players", []):
                 existing = db.query(Player).filter(Player.name == p_data["name"]).first()
                 was_new = existing is None
-                player = _find_or_create_player(db, p_data)
-                player_ids.append(player.id)
+                player = find_or_create_player(
+                    db, p_data["name"],
+                    role=p_data.get("role"),
+                    batting_style=p_data.get("battingStyle"),
+                    bowling_style=p_data.get("bowlingStyle"),
+                    country=p_data.get("country"),
+                    player_img=p_data.get("playerImg"),
+                )
                 if was_new:
                     players_added += 1
                 elif existing and (not existing.role or not existing.batting_style):
                     players_enriched += 1
 
-            team_squad_map[short_name] = player_ids
-            print(f"  {short_name}: {squad['name']} — {len(player_ids)} players")
+                # Upsert squad membership
+                existing_sm = db.query(SquadMember).filter(
+                    SquadMember.team_id == team.id,
+                    SquadMember.player_id == player.id,
+                    SquadMember.season == "2026",
+                ).first()
+                if not existing_sm:
+                    db.add(SquadMember(
+                        team_id=team.id,
+                        player_id=player.id,
+                        season="2026",
+                        is_captain=False,
+                    ))
+                    squad_members_added += 1
+
+            print(f"  {short_name}: {squad['name']} — {len(squad.get('players', []))} players")
 
         db.commit()
         print(f"  Players added: {players_added}, enriched: {players_enriched}")
+        print(f"  Squad memberships added: {squad_members_added}")
 
         # 2. Process fixtures — add as Match records
-        # Use hash of UUID as integer source_match_id to avoid column type change
         matches_added = 0
         matches_updated = 0
 
+        # Pre-load teams to avoid N+1 queries
+        all_teams = {t.short_name: t for t in db.query(Team).all()}
+        all_teams_by_name = {t.name.lower(): t for t in all_teams.values()}
+
         for fix in fixtures:
-            # Generate a stable integer ID from the UUID
-            source_id = abs(hash(fix["id"])) % (10**9) + 2000000  # offset to avoid collision with CSV IDs
+            cricapi_uuid = fix["id"]
 
-            existing = db.query(Match).filter(Match.source_match_id == source_id).first()
+            # Look up by cricapi_id first (reliable)
+            existing = db.query(Match).filter(Match.cricapi_id == cricapi_uuid).first()
+            if not existing:
+                source_id = stable_source_id(cricapi_uuid)
+                existing = db.query(Match).filter(Match.source_match_id == source_id).first()
+            else:
+                source_id = existing.source_match_id
 
-            # Find teams
-            team1 = db.query(Team).filter(Team.short_name == fix.get("team1")).first() if fix.get("team1") else None
-            team2 = db.query(Team).filter(Team.short_name == fix.get("team2")).first() if fix.get("team2") else None
+            team1 = all_teams.get(fix.get("team1"))
+            team2 = all_teams.get(fix.get("team2"))
+            venue = find_or_create_venue(db, fix.get("venue"))
 
-            # Find venue
-            venue = _find_or_create_venue(db, fix.get("venue"))
-
-            # Parse result
             winner_name, win_margin, win_type = _parse_result(fix.get("status", ""))
             winner = None
             if winner_name:
-                winner = db.query(Team).filter(Team.name.ilike(f"%{winner_name}%")).first()
+                wn_lower = winner_name.lower()
+                winner = next((t for t in all_teams.values() if wn_lower in t.name.lower()), None)
                 if not winner and team1 and winner_name in (team1.name, fix.get("team1_name", "")):
                     winner = team1
                 elif not winner and team2 and winner_name in (team2.name, fix.get("team2_name", "")):
@@ -226,16 +160,24 @@ def run_ingestion():
                     pass
 
             if existing:
-                # Update with result if match has ended
+                if not existing.cricapi_id:
+                    existing.cricapi_id = cricapi_uuid
+                existing.datetime_gmt = fix.get("dateTimeGMT")
+                existing.match_started = fix.get("matchStarted", False)
+                existing.match_ended = fix.get("matchEnded", False)
+                existing.status_text = fix.get("status", "")
                 if fix.get("matchEnded") and winner and not existing.winner_id:
                     existing.winner_id = winner.id
                     existing.win_margin = win_margin
                     existing.win_type = win_type
                     matches_updated += 1
             else:
+                source_id = stable_source_id(cricapi_uuid)
                 m = Match(
                     source_match_id=source_id,
+                    cricapi_id=cricapi_uuid,
                     date=match_date,
+                    datetime_gmt=fix.get("dateTimeGMT"),
                     season="2026",
                     stage="League",
                     venue_id=venue.id if venue else None,
@@ -244,12 +186,9 @@ def run_ingestion():
                     winner_id=winner.id if winner else None,
                     win_margin=win_margin,
                     win_type=win_type,
-                    toss_winner_id=None,
-                    toss_decision=None,
-                    player_of_match_id=None,
-                    method=None,
-                    first_innings_score=None,
-                    second_innings_score=None,
+                    match_started=fix.get("matchStarted", False),
+                    match_ended=fix.get("matchEnded", False),
+                    status_text=fix.get("status", ""),
                 )
                 db.add(m)
                 matches_added += 1
@@ -257,23 +196,7 @@ def run_ingestion():
         db.commit()
         print(f"\n  Fixtures added: {matches_added}, updated: {matches_updated}")
 
-        # 3. Store team squad membership in a simple JSON file for quick access
-        squad_db_map = {}
-        for short, pids in team_squad_map.items():
-            team = db.query(Team).filter(Team.short_name == short).first()
-            if team:
-                squad_db_map[short] = {
-                    "team_id": team.id,
-                    "team_name": team.name,
-                    "player_ids": pids,
-                }
-
-        squad_file = DATA_FILE.parent / "team_squads_2026.json"
-        with open(squad_file, "w") as f:
-            json.dump(squad_db_map, f, indent=2)
-        print(f"  Squad mapping saved to {squad_file}")
-
-        # 4. Update venue stats for new venues
+        # 3. Update venue stats for new venues
         new_venues = db.query(Venue).filter(~Venue.id.in_(
             db.query(VenueStats.venue_id)
         )).all()
@@ -296,11 +219,13 @@ def run_ingestion():
         total_matches = db.query(Match).count()
         total_players = db.query(Player).count()
         total_venues = db.query(Venue).count()
+        total_squad = db.query(SquadMember).filter(SquadMember.season == "2026").count()
         ipl2026_matches = db.query(Match).filter(Match.season == "2026").count()
         print(f"\n=== Database Summary ===")
         print(f"  Total matches: {total_matches} (IPL 2026: {ipl2026_matches})")
         print(f"  Total players: {total_players}")
         print(f"  Total venues: {total_venues}")
+        print(f"  Squad members (2026): {total_squad}")
 
     except Exception as e:
         db.rollback()

@@ -6,8 +6,6 @@ including head-to-head, player stats, matchup matrix, venue analysis, toss
 recommendation, and win prediction.
 """
 
-import json
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends
@@ -16,10 +14,11 @@ from sqlalchemy import func, case, and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.config import DATA_DIR
+from app.services.squad_service import get_squad_data, get_player_meta, get_squad_player_names
 from app.models.models import (
     Team,
     Player,
+    SquadMember,
     Match,
     Delivery,
     PlayerSeasonBatting,
@@ -46,39 +45,19 @@ class MatchAnalysisRequest(BaseModel):
     venue_id: int
 
 
-def _load_squad_data() -> dict:
-    path = DATA_DIR / "team_squads_2026.json"
-    with open(path) as f:
-        return json.load(f)
-
-
-def _load_name_meta() -> dict:
-    path = DATA_DIR / "ipl2026.json"
-    with open(path) as f:
-        data = json.load(f)
-    mapping = {}
-    for _team, team_data in data.get("squads", {}).items():
-        for p in team_data.get("players", []):
-            mapping[p["name"]] = {
-                "country": p.get("country", "India"),
-                "role": p.get("role", "Unknown"),
-                "batting_style": p.get("battingStyle", ""),
-                "bowling_style": p.get("bowlingStyle", ""),
-            }
-    return mapping
-
-
 UNAVAILABLE_STATUSES = frozenset({"injured", "ruled_out"})
 
 
-def _name_to_id_map(squad_info: dict, squad_players: list[dict]) -> dict[str, int]:
-    """Map CricAPI full name (lowercase) -> DB player_id using aligned arrays."""
-    ids = squad_info.get("player_ids", [])
-    return {
-        p["name"].lower(): ids[i]
-        for i, p in enumerate(squad_players)
-        if i < len(ids)
-    }
+def _name_to_id_map(db: Session, team_short: str) -> dict[str, int]:
+    """Map player name (lowercase) -> DB player_id from squad_members."""
+    members = (
+        db.query(SquadMember)
+        .join(Player, SquadMember.player_id == Player.id)
+        .join(Team, SquadMember.team_id == Team.id)
+        .filter(SquadMember.season == "2026", Team.short_name == team_short)
+        .all()
+    )
+    return {m.player.name.lower(): m.player_id for m in members}
 
 
 # -----------------------------------------------------------------------
@@ -577,7 +556,7 @@ def _build_team_analysis(
     name_meta: dict,
     unavailable_player_ids: set[int] | None = None,
 ) -> dict:
-    squad_data = _load_squad_data()
+    squad_data = get_squad_data(db)
     if team_short not in squad_data:
         return {"error": f"Team {team_short} not found"}
 
@@ -686,8 +665,8 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
     Returns everything the frontend needs: head-to-head, team analyses,
     matchup matrix, venue analysis, toss recommendation, and win prediction.
     """
-    squad_data = _load_squad_data()
-    name_meta = _load_name_meta()
+    squad_data = get_squad_data(db)
+    name_meta = get_player_meta(db)
 
     # Resolve teams
     t1_info = squad_data.get(req.team1)
@@ -707,24 +686,14 @@ def match_analysis(req: MatchAnalysisRequest, db: Session = Depends(get_db)):
         return {"error": "Team not found in database"}
 
     # --- Fetch latest news for both teams (injuries, fitness, conditions) ---
-    ipl2026_path = DATA_DIR / "ipl2026.json"
-    t1_player_names = []
-    t2_player_names = []
-    t1_squad: dict = {}
-    t2_squad: dict = {}
-    if ipl2026_path.exists():
-        with open(ipl2026_path) as f:
-            ipl_data = json.load(f)
-        t1_squad = ipl_data.get("squads", {}).get(req.team1, {})
-        t2_squad = ipl_data.get("squads", {}).get(req.team2, {})
-        t1_player_names = [p["name"] for p in t1_squad.get("players", [])]
-        t2_player_names = [p["name"] for p in t2_squad.get("players", [])]
+    t1_player_names = get_squad_player_names(db, req.team1)
+    t2_player_names = get_squad_player_names(db, req.team2)
 
     team1_news = fetch_player_news(team1.name, t1_player_names)
     team2_news = fetch_player_news(team2.name, t2_player_names)
 
-    t1_name_id = _name_to_id_map(t1_info, t1_squad.get("players", []))
-    t2_name_id = _name_to_id_map(t2_info, t2_squad.get("players", []))
+    t1_name_id = _name_to_id_map(db, req.team1)
+    t2_name_id = _name_to_id_map(db, req.team2)
 
     # Build set of unavailable player IDs (injured/ruled_out) per team
     t1_unavailable_ids: set[int] = set()

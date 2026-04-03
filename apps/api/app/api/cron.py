@@ -18,7 +18,10 @@ def verify_cron_secret(x_cron_secret: str = Header(None, alias="X-Cron-Secret"))
 
 
 @router.post("/refresh-squads")
-async def refresh_squads(_: None = Depends(verify_cron_secret)):
+async def refresh_squads(
+    _: None = Depends(verify_cron_secret),
+    db: Session = Depends(get_db),
+):
     """Refresh IPL 2026 squad and fixture data from CricAPI."""
     if not settings.CRICAPI_KEY:
         return {"status": "skipped", "reason": "CRICAPI_KEY not configured"}
@@ -26,7 +29,7 @@ async def refresh_squads(_: None = Depends(verify_cron_secret)):
     from app.services.external_api import refresh_ipl2026_data
 
     try:
-        result = await refresh_ipl2026_data()
+        result = await refresh_ipl2026_data(db)
         if "error" in result:
             logger.warning(f"Cron refresh failed: {result['error']}")
             return {"status": "error", "detail": result["error"]}
@@ -62,3 +65,5 @@ async def sync_match_results(
     except Exception as e:
         logger.error(f"Cron sync exception: {e}")
         return {"status": "error", "detail": str(e)}
+
+

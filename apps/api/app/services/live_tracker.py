@@ -24,7 +24,7 @@ from typing import Optional
 import joblib
 import numpy as np
 
-from app.config import DATA_DIR, MODEL_DIR
+from app.config import MODEL_DIR
 from app.services.cricapi_utils import parse_score, extract_team_short
 from app.services.weather import fetch_weather, VENUE_COORDS
 from app.services.game_plan_live import recalculate_game_plan
@@ -37,6 +37,11 @@ CRICAPI_KEY = None  # Set from config on init
 _score_cache: list = []
 _score_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
 SCORE_CACHE_TTL = timedelta(seconds=15)
+
+# Match window cache — avoids opening a DB session on every poll
+_match_window_cache: bool = True
+_match_window_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
+_MATCH_WINDOW_TTL = timedelta(seconds=60)
 
 # ML model cache (loaded once from disk)
 _ml_models = None
@@ -64,39 +69,51 @@ def init_tracker(api_key: str):
 def _is_match_window() -> bool:
     """Check if any IPL match could be live right now.
 
-    IPL matches start at 15:30 IST (10:00 UTC) or 19:30 IST (14:00 UTC)
-    and last ~4 hours. Only poll CricAPI during these windows.
+    Cached for 60 seconds to avoid opening a DB session on every poll.
     """
-    import json
+    global _match_window_cache, _match_window_cache_time
+
+    now = datetime.now(timezone.utc)
+    if (now - _match_window_cache_time) < _MATCH_WINDOW_TTL:
+        return _match_window_cache
+
+    from app.database import SessionLocal
+    from app.models.models import Match
+
     try:
-        cache_path = DATA_DIR / "ipl2026.json"
-        if not cache_path.exists():
-            return True  # can't check, assume yes
+        db = SessionLocal()
+        try:
+            matches = db.query(Match).filter(
+                Match.season == "2026",
+                Match.match_ended == False,
+                Match.datetime_gmt.isnot(None),
+            ).all()
+        finally:
+            db.close()
 
-        with open(cache_path) as f:
-            data = json.load(f)
+        if not matches:
+            _match_window_cache = True
+            _match_window_cache_time = now
+            return True
 
-        now = datetime.now(timezone.utc)
-        for fix in data.get("fixtures", []):
-            if fix.get("matchEnded"):
-                continue
-            match_time = fix.get("dateTimeGMT", "")
-            if not match_time:
-                continue
+        result = False
+        for m in matches:
             try:
-                start = datetime.fromisoformat(match_time.replace("Z", "+00:00"))
+                start = datetime.fromisoformat(m.datetime_gmt.replace("Z", "+00:00"))
                 if not start.tzinfo:
                     start = start.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 continue
 
-            # Window: 30 min before start to 5 hours after start
             window_start = start - timedelta(minutes=30)
             window_end = start + timedelta(hours=5)
             if window_start <= now <= window_end:
-                return True
+                result = True
+                break
 
-        return False
+        _match_window_cache = result
+        _match_window_cache_time = now
+        return result
     except Exception:
         return True  # on error, allow polling
 
