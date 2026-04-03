@@ -312,7 +312,7 @@ def get_team_squad(db: Session, short_name: str) -> Optional[dict]:
 
 
 def get_upcoming_fixtures(db: Session, limit: int = 5) -> list:
-    """Get upcoming (not started) fixtures from DB."""
+    """Get upcoming fixtures from DB. Excludes completed matches even if match_ended flag is stale."""
     today = date.today()
     matches = (
         db.query(Match)
@@ -320,6 +320,7 @@ def get_upcoming_fixtures(db: Session, limit: int = 5) -> list:
             Match.season == "2026",
             Match.date >= today,
             Match.match_ended == False,
+            Match.winner_id.is_(None),
         )
         .options(joinedload(Match.team1), joinedload(Match.team2), joinedload(Match.venue))
         .order_by(Match.date)
