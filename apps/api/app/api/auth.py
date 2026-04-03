@@ -2,7 +2,8 @@
 
 Public:  POST /register, POST /login
 Auth:    GET /me
-Admin:   GET /users, PATCH /users/{id}/role, PATCH /users/{id}/active
+Admin:   GET /users, PATCH /users/{id}/role, PATCH /users/{id}/active,
+         PATCH /users/{id}/org, POST /orgs, GET /orgs
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -41,6 +42,15 @@ class ActiveUpdateRequest(BaseModel):
 
 class OrgTeamLinkRequest(BaseModel):
     team_id: int  # IPL team ID to associate with this organization
+
+
+class CreateOrgRequest(BaseModel):
+    name: str
+    team_id: Optional[int] = None  # Optionally link to an IPL team on creation
+
+
+class MoveUserOrgRequest(BaseModel):
+    organization_id: Optional[int] = None  # None = remove from org
 
 
 def _user_dict(user: User) -> dict:
@@ -183,3 +193,108 @@ def link_org_to_team(
         "team_name": team.name,
         "short_name": team.short_name,
     }
+
+
+def _org_dict(org: Organization) -> dict:
+    """Serialize an Organization to a JSON-safe dict."""
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "plan": org.plan.value if hasattr(org.plan, "value") else org.plan,
+        "team_id": org.team_id,
+        "team_name": org.team.short_name if org.team else None,
+        "user_count": len(org.users) if org.users else 0,
+    }
+
+
+# --- Organization management (admin / super-admin) ---
+
+@router.get("/orgs")
+def list_organizations(
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """List organizations. Super-admins (no org) see all; org admins see only their own."""
+    if admin.organization_id:
+        org = db.get(Organization, admin.organization_id)
+        return [_org_dict(org)] if org else []
+    # Super-admin: list all orgs
+    orgs = db.query(Organization).order_by(Organization.id).all()
+    return [_org_dict(o) for o in orgs]
+
+
+@router.post("/orgs")
+def create_organization(
+    req: CreateOrgRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Create a new organization (admin only).
+
+    Super-admins can create orgs freely. Org-bound admins can also create
+    new orgs (e.g., to set up a partner franchise).
+    """
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="Organization name is required")
+
+    slug = req.name.strip().lower().replace(" ", "-")[:50]
+    existing = db.query(Organization).filter(Organization.slug == slug).first()
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Organization '{req.name}' already exists")
+
+    # Validate team if provided
+    team = None
+    if req.team_id:
+        team = db.get(Team, req.team_id)
+        if not team:
+            raise HTTPException(status_code=404, detail="Team not found")
+
+    org = Organization(name=req.name.strip(), slug=slug, team_id=req.team_id)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    return _org_dict(org)
+
+
+@router.patch("/users/{user_id}/org")
+def move_user_to_org(
+    user_id: int,
+    req: MoveUserOrgRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Move a user to a different organization (admin only).
+
+    Super-admins (no org) can move any user to any org.
+    Org-bound admins can only move users OUT of their own org
+    or move unaffiliated users INTO their org.
+    Passing organization_id=null removes the user from their org.
+    """
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if target.id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot move yourself between organizations")
+
+    # Permission checks for org-bound admins
+    if admin.organization_id:
+        # Can move users from own org, or adopt unaffiliated users
+        if target.organization_id and target.organization_id != admin.organization_id:
+            raise HTTPException(status_code=403, detail="Cannot move users from other organizations")
+        if req.organization_id and req.organization_id != admin.organization_id:
+            raise HTTPException(status_code=403, detail="Can only move users into your own organization")
+
+    # Validate target org exists (if not removing from org)
+    if req.organization_id is not None:
+        dest_org = db.get(Organization, req.organization_id)
+        if not dest_org:
+            raise HTTPException(status_code=404, detail="Destination organization not found")
+
+    target.organization_id = req.organization_id
+    db.commit()
+    db.refresh(target)
+
+    return _user_dict(target)

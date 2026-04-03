@@ -266,6 +266,32 @@ export const updateUserActive = (userId: number, isActive: boolean) =>
     body: JSON.stringify({ is_active: isActive }),
   });
 
+export const moveUserToOrg = (userId: number, organizationId: number | null) =>
+  fetchAPI<AdminUser>(`/auth/users/${userId}/org`, {
+    method: "PATCH",
+    body: JSON.stringify({ organization_id: organizationId }),
+  });
+
+// --- Organization management ---
+
+export interface OrgInfo {
+  id: number;
+  name: string;
+  slug: string;
+  plan: string;
+  team_id: number | null;
+  team_name: string | null;
+  user_count: number;
+}
+
+export const fetchOrgs = () => fetchAPI<OrgInfo[]>("/auth/orgs");
+
+export const createOrg = (name: string, teamId?: number) =>
+  fetchAPI<OrgInfo>("/auth/orgs", {
+    method: "POST",
+    body: JSON.stringify({ name, team_id: teamId ?? null }),
+  });
+
 export const linkOrgToTeam = (teamId: number) =>
   fetchAPI<{ organization: string; team_id: number; team_name: string; short_name: string }>(
     "/auth/org/team",
