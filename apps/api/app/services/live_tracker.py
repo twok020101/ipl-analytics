@@ -38,6 +38,11 @@ _score_cache: list = []
 _score_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
 SCORE_CACHE_TTL = timedelta(seconds=15)
 
+# currentMatches cache — richer data but heavier endpoint
+_current_matches_cache: dict = {}  # id -> match data
+_current_matches_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
+_CURRENT_MATCHES_TTL = timedelta(seconds=30)
+
 # Match window cache — avoids opening a DB session on every poll
 _match_window_cache: bool = True
 _match_window_cache_time: datetime = datetime.min.replace(tzinfo=timezone.utc)
@@ -121,11 +126,100 @@ def _is_match_window() -> bool:
         return True  # on error, allow polling
 
 
-async def fetch_live_scores() -> list:
-    """Fetch all live IPL scores from cricScore endpoint.
+async def _fetch_current_matches() -> dict:
+    """Fetch from currentMatches endpoint — has actual scores and venue data.
 
-    Only calls CricAPI when a match could be live (based on fixture schedule).
-    Cached for 30 seconds to prevent API flood from multiple users.
+    Returns a dict keyed by match ID for quick lookup.
+    Cached for 30 seconds to limit API usage.
+    """
+    global _current_matches_cache, _current_matches_cache_time
+
+    now = datetime.now(timezone.utc)
+    if _current_matches_cache and (now - _current_matches_cache_time) < _CURRENT_MATCHES_TTL:
+        return _current_matches_cache
+
+    if not CRICAPI_KEY:
+        return _current_matches_cache
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                "https://api.cricapi.com/v1/currentMatches",
+                params={"apikey": CRICAPI_KEY, "offset": 0},
+            )
+            data = resp.json()
+            if data.get("status") != "success":
+                return _current_matches_cache
+
+            result = {}
+            for m in data.get("data", []):
+                name = m.get("name", "")
+                if "indian premier" in name.lower() or "ipl" in name.lower():
+                    result[m["id"]] = m
+
+            _current_matches_cache = result
+            _current_matches_cache_time = now
+            return result
+    except Exception as e:
+        logger.error(f"Error fetching currentMatches: {e}")
+        return _current_matches_cache
+
+
+def _scores_from_current_match(cm: dict, team1_short: str, team2_short: str) -> tuple:
+    """Extract team scores from currentMatches score array.
+
+    The score array contains entries like:
+      {"r": 39, "w": 1, "o": 4, "inning": "Chennai Super Kings Inning 1"}
+    We match innings to teams by checking if the team short name appears
+    in the full team name from the inning string.
+    """
+    scores = cm.get("score", [])
+    t1_score = {"runs": 0, "wickets": 0, "overs": 0.0}
+    t2_score = {"runs": 0, "wickets": 0, "overs": 0.0}
+
+    # Build full name -> short name mapping from the currentMatches data
+    cm_teams = cm.get("teamInfo", [])
+    team_name_map = {}  # lowercase full name fragment -> short name
+    for ti in cm_teams:
+        sn = ti.get("shortname", "")
+        name = ti.get("name", "")
+        if sn and name:
+            team_name_map[name.lower()] = sn
+
+    for s in scores:
+        inning = s.get("inning", "").lower()
+        r = s.get("r", 0)
+        w = s.get("w", 0)
+        o = float(s.get("o", 0))
+        score_dict = {"runs": r, "wickets": w, "overs": o}
+
+        # Match inning to team
+        matched = False
+        for full_name, short in team_name_map.items():
+            if full_name in inning:
+                if short == team1_short:
+                    t1_score = score_dict
+                elif short == team2_short:
+                    t2_score = score_dict
+                matched = True
+                break
+
+        # Fallback: check if team short name appears in inning text
+        if not matched:
+            if team1_short.lower() in inning:
+                t1_score = score_dict
+            elif team2_short.lower() in inning:
+                t2_score = score_dict
+
+    return t1_score, t2_score
+
+
+async def fetch_live_scores() -> list:
+    """Fetch all live IPL scores from cricScore + currentMatches endpoints.
+
+    cricScore is lightweight (1 call for all matches) but often returns
+    empty scores. currentMatches has actual ball-by-ball scores and venue
+    data. We use cricScore for match listing and enrich with currentMatches.
     """
     global _score_cache, _score_cache_time
 
@@ -148,12 +242,13 @@ async def fetch_live_scores() -> list:
             data = resp.json()
             if data.get("status") != "success":
                 logger.warning(f"cricScore failed: {data.get('reason')}")
-                return _score_cache  # return stale cache on API failure
+                return _score_cache
 
             ipl_matches = []
+            has_live = False
             for m in data.get("data", []):
                 if "indian premier" in m.get("series", "").lower():
-                    ipl_matches.append({
+                    match_data = {
                         "id": m["id"],
                         "team1": extract_team_short(m.get("t1", "")),
                         "team2": extract_team_short(m.get("t2", "")),
@@ -164,14 +259,40 @@ async def fetch_live_scores() -> list:
                         "status": m.get("status", ""),
                         "match_state": m.get("ms", ""),
                         "datetime_gmt": m.get("dateTimeGMT", ""),
-                    })
+                        "venue": None,
+                    }
+                    if m.get("ms") == "live":
+                        has_live = True
+                    ipl_matches.append(match_data)
+
+            # Enrich with currentMatches data (has actual scores + venue)
+            if has_live:
+                cm_data = await _fetch_current_matches()
+                for match in ipl_matches:
+                    cm = cm_data.get(match["id"])
+                    if not cm:
+                        continue
+
+                    # Always grab venue from currentMatches
+                    match["venue"] = cm.get("venue")
+
+                    # Update scores from currentMatches if cricScore had empty ones
+                    if match["match_state"] in ("live", "result"):
+                        t1s, t2s = _scores_from_current_match(
+                            cm, match["team1"], match["team2"],
+                        )
+                        # Use currentMatches scores if they have actual data
+                        if t1s["runs"] > 0 or t1s["wickets"] > 0 or t1s["overs"] > 0:
+                            match["team1_score"] = t1s
+                        if t2s["runs"] > 0 or t2s["wickets"] > 0 or t2s["overs"] > 0:
+                            match["team2_score"] = t2s
 
             _score_cache = ipl_matches
             _score_cache_time = now
             return ipl_matches
     except Exception as e:
         logger.error(f"Error fetching live scores: {e}")
-        return _score_cache  # return stale cache on error
+        return _score_cache
 
 
 async def fetch_match_playing11(match_id: str) -> dict:
@@ -296,12 +417,24 @@ def _heuristic_probability(innings, runs, wickets, overs, target, venue_avg):
 
 
 def _extract_venue_city(match: dict) -> Optional[str]:
-    """Try to extract venue city from match status or team names."""
+    """Extract venue city from match data.
+
+    Checks (in order):
+    1. venue field (from currentMatches enrichment, e.g. "MA Chidambaram Stadium, Chennai")
+    2. status text (e.g. "... at Chennai")
+    """
+    # Check venue string first (most reliable — from currentMatches)
+    venue = match.get("venue") or ""
+    for city in VENUE_COORDS:
+        if city.lower() in venue.lower():
+            return city
+
+    # Fallback: check status text
     status = match.get("status", "")
-    # Use VENUE_COORDS keys as the canonical city list
     for city in VENUE_COORDS:
         if city.lower() in status.lower():
             return city
+
     return None
 
 

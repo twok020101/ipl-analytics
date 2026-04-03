@@ -43,7 +43,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             func.sum(PlayerSeasonBatting.matches).label("total_matches"),
         )
         .join(Player, PlayerSeasonBatting.player_id == Player.id)
-        .group_by(PlayerSeasonBatting.player_id)
+        .group_by(PlayerSeasonBatting.player_id, Player.name)
         .order_by(func.sum(PlayerSeasonBatting.runs).desc())
         .limit(5)
         .all()
@@ -62,7 +62,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
             func.sum(PlayerSeasonBowling.matches).label("total_matches"),
         )
         .join(Player, PlayerSeasonBowling.player_id == Player.id)
-        .group_by(PlayerSeasonBowling.player_id)
+        .group_by(PlayerSeasonBowling.player_id, Player.name)
         .order_by(func.sum(PlayerSeasonBowling.wickets).desc())
         .limit(5)
         .all()
