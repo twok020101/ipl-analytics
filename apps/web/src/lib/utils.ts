@@ -52,11 +52,11 @@ export function getTeamColor(team: string): string {
 }
 
 export function getTeamBg(team: string): string {
-  return teamColors[team]?.bg || "bg-gray-500/10";
+  return teamColors[team]?.bg || "bg-muted";
 }
 
 export function getTeamTextColor(team: string): string {
-  return teamColors[team]?.text || "text-gray-400";
+  return teamColors[team]?.text || "text-muted-foreground";
 }
 
 /** Human-friendly relative time string (e.g., "30s ago", "5m ago"). */

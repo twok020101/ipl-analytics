@@ -136,14 +136,14 @@ export default function StrategyPage() {
                       "flex items-center gap-2 p-3 rounded-lg border text-left text-sm transition-all",
                       isSelected
                         ? "border-primary bg-primary/10 text-foreground"
-                        : "border-gray-800 bg-gray-900 text-muted-foreground hover:border-gray-700 hover:bg-gray-800",
+                        : "border-border bg-card text-muted-foreground hover:border-border-strong hover:bg-muted",
                       !isSelected && selectedPlayerIds.length >= 11 && "opacity-40 cursor-not-allowed"
                     )}
                     disabled={!isSelected && selectedPlayerIds.length >= 11}
                   >
                     <div className={cn(
                       "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
-                      isSelected ? "bg-primary border-primary" : "border-gray-600"
+                      isSelected ? "bg-primary border-primary" : "border-border-strong"
                     )}>
                       {isSelected && <Check className="h-3 w-3 text-white" />}
                     </div>
@@ -202,7 +202,7 @@ export default function StrategyPage() {
                     {(strategy.batting_order || []).map((entry) => (
                       <div
                         key={entry.position}
-                        className="flex items-center gap-4 p-4 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors"
+                        className="flex items-center gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                       >
                         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
                           {entry.position}
@@ -249,10 +249,10 @@ export default function StrategyPage() {
                           <h3 className="text-lg font-semibold">{phase.phase}</h3>
                           <Badge variant="outline">{phase.overs_range}</Badge>
                         </div>
-                        <div className="rounded-lg border border-gray-800 overflow-hidden">
+                        <div className="rounded-lg border border-border overflow-hidden">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="bg-gray-800/50 border-b border-gray-800">
+                              <tr className="bg-muted/50 border-b border-border">
                                 <th className="px-4 py-2 text-left font-medium text-muted-foreground">Bowler</th>
                                 <th className="px-4 py-2 text-center font-medium text-muted-foreground">Overs</th>
                                 <th className="px-4 py-2 text-center font-medium text-muted-foreground">Proj. Economy</th>
@@ -260,7 +260,7 @@ export default function StrategyPage() {
                             </thead>
                             <tbody>
                               {(phase.bowlers || []).map((bowler) => (
-                                <tr key={bowler.player_id} className="border-b border-gray-800/50">
+                                <tr key={bowler.player_id} className="border-b border-border/50">
                                   <td className="px-4 py-2 font-medium">{bowler.player_name}</td>
                                   <td className="px-4 py-2 text-center">{bowler.overs}</td>
                                   <td className="px-4 py-2 text-center text-green-400">

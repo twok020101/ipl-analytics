@@ -59,11 +59,11 @@ export function DataTable<TData>({
           className="max-w-sm"
         />
       )}
-      <div className="rounded-lg border border-gray-800 overflow-hidden">
+      <div className="rounded-lg border border-border overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="border-b border-gray-800 bg-gray-800/50">
+              <tr key={headerGroup.id} className="border-b border-border bg-muted/50">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
@@ -94,8 +94,8 @@ export function DataTable<TData>({
                 <tr
                   key={row.id}
                   className={cn(
-                    "border-b border-gray-800/50 transition-colors hover:bg-gray-800/30",
-                    i % 2 === 0 ? "bg-transparent" : "bg-gray-900/50"
+                    "border-b border-border/50 transition-colors hover:bg-muted/30",
+                    i % 2 === 0 ? "bg-transparent" : "bg-card/50"
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (

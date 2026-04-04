@@ -17,7 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
-  Zap,
+  Target,
 } from "lucide-react";
 import { cn, getTeamColor, getTeamTextColor } from "@/lib/utils";
 import type { Fixture, Squad } from "@/lib/types";
@@ -43,7 +43,7 @@ function FixtureCard({
   return (
     <Card
       className={cn(
-        "transition-all hover:border-gray-700",
+        "transition-all hover:border-border-strong",
         isLive && "border-green-500/50 bg-green-500/5",
         isToday && !isLive && !isCompleted && "border-primary/50 bg-primary/5"
       )}
@@ -61,7 +61,7 @@ function FixtureCard({
             <Badge className="bg-green-500 text-white animate-pulse text-xs">LIVE</Badge>
           )}
           {isCompleted && (
-            <Badge className="bg-gray-700 text-gray-300 text-xs">Completed</Badge>
+            <Badge className="bg-muted-strong text-muted-foreground text-xs">Completed</Badge>
           )}
           {isToday && !isLive && !isCompleted && (
             <Badge className="bg-primary/20 text-primary text-xs">Today</Badge>
@@ -75,7 +75,7 @@ function FixtureCard({
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-1">
             {fixture.team1_img && (
-              <img src={fixture.team1_img} alt={fixture.team1} className="w-10 h-10 rounded-lg object-contain bg-gray-800 p-1" />
+              <img src={fixture.team1_img} alt={fixture.team1} className="w-10 h-10 rounded-lg object-contain bg-muted p-1" />
             )}
             <div>
               <p className={cn("font-bold text-lg", getTeamTextColor(fixture.team1))}>
@@ -86,7 +86,7 @@ function FixtureCard({
           </div>
 
           <div className="flex flex-col items-center px-4">
-            <span className="text-xs font-bold text-muted-foreground bg-gray-800 px-3 py-1 rounded-full">
+            <span className="text-xs font-bold text-muted-foreground bg-muted px-3 py-1 rounded-full">
               VS
             </span>
           </div>
@@ -99,7 +99,7 @@ function FixtureCard({
               <p className="text-xs text-muted-foreground">{fixture.team2_name}</p>
             </div>
             {fixture.team2_img && (
-              <img src={fixture.team2_img} alt={fixture.team2} className="w-10 h-10 rounded-lg object-contain bg-gray-800 p-1" />
+              <img src={fixture.team2_img} alt={fixture.team2} className="w-10 h-10 rounded-lg object-contain bg-muted p-1" />
             )}
           </div>
         </div>
@@ -112,7 +112,7 @@ function FixtureCard({
 
         {/* Result or Predict */}
         {isCompleted ? (
-          <div className="mt-3 p-2.5 rounded-lg bg-gray-800/50 text-center">
+          <div className="mt-3 p-2.5 rounded-lg bg-muted/50 text-center">
             <p className="text-sm font-medium text-amber-400">{fixture.status}</p>
           </div>
         ) : (
@@ -122,7 +122,7 @@ function FixtureCard({
             className="w-full mt-3"
             onClick={() => onAnalyze(fixture)}
           >
-            <Zap className="h-3.5 w-3.5 mr-1.5" /> Analyze Match
+            <Target className="h-3.5 w-3.5 mr-1.5" /> Analyze Match
           </Button>
         )}
       </CardContent>
@@ -144,7 +144,7 @@ function SquadCard({ squad }: { squad: Squad }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {squad.img && (
-              <img src={squad.img} alt={squad.short_name} className="w-10 h-10 rounded-lg object-contain bg-gray-800 p-1" />
+              <img src={squad.img} alt={squad.short_name} className="w-10 h-10 rounded-lg object-contain bg-muted p-1" />
             )}
             <div>
               <p className={cn("font-bold text-lg", getTeamTextColor(squad.short_name))}>
@@ -171,12 +171,12 @@ function SquadCard({ squad }: { squad: Squad }) {
             {squad.players.map((p) => (
               <div
                 key={p.id}
-                className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800/50 transition-colors"
+                className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <img
                   src={p.playerImg}
                   alt={p.name}
-                  className="w-8 h-8 rounded-full object-cover bg-gray-800"
+                  className="w-8 h-8 rounded-full object-cover bg-muted"
                   onError={(e) => { (e.target as HTMLImageElement).src = "https://h.cricapi.com/img/icon512.png"; }}
                 />
                 <div className="flex-1 min-w-0">
@@ -230,7 +230,7 @@ export default function FixturesPage() {
   return (
     <div className="space-y-8">
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-600/20 via-red-600/10 to-yellow-600/20 border border-gray-800 p-8">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-600/20 via-red-600/10 to-yellow-600/20 border border-border p-8">
         <div className="relative">
           <div className="flex items-center gap-3 mb-2">
             <Trophy className="h-8 w-8 text-amber-400" />

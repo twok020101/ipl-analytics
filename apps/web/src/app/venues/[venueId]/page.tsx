@@ -53,7 +53,7 @@ export default function VenueDetailPage() {
       </Link>
 
       {/* Venue Header */}
-      <div className="rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-900 to-gray-900/50 p-8">
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-card to-card/50 p-8">
         <div className="flex items-center gap-3 mb-2">
           <MapPin className="h-6 w-6 text-primary" />
           <h1 className="text-3xl font-bold">{venue.name}</h1>
@@ -109,19 +109,19 @@ export default function VenueDetailPage() {
             <CardTitle>Venue Characteristics</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+            <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
               <span className="text-muted-foreground">Lowest Score</span>
               <span className="font-bold text-red-400">{venue.lowest_score || "-"}</span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+            <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
               <span className="text-muted-foreground">Field First Win %</span>
               <span className="font-bold text-green-400">{venue.bat_first_win_pct ? (100 - venue.bat_first_win_pct).toFixed(0) : "-"}%</span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+            <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
               <span className="text-muted-foreground">Avg 1st Inn</span>
               <span className="font-bold text-primary">{venue.avg_first_innings_score?.toFixed(0) || "-"}</span>
             </div>
-            <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+            <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
               <span className="text-muted-foreground">Avg 2nd Inn</span>
               <span className="font-bold text-purple-400">{venue.avg_second_innings_score?.toFixed(0) || "-"}</span>
             </div>

@@ -98,7 +98,7 @@ export default function TeamDetailPage() {
       </Link>
 
       {/* Team Header */}
-      <div className={cn("rounded-2xl border border-gray-800 p-8", getTeamBg(shortName))}>
+      <div className={cn("rounded-2xl border border-border p-8", getTeamBg(shortName))}>
         <div className="flex items-center gap-4 mb-6">
           <Badge variant="outline" className={cn("text-lg px-3 py-1", getTeamTextColor(shortName))}>
             {shortName}
@@ -143,23 +143,23 @@ export default function TeamDetailPage() {
                 <CardTitle>Quick Stats</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                   <span className="text-muted-foreground">Win Percentage</span>
                   <span className="font-bold text-green-400">{formatPercentage(team.stats?.win_pct || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                   <span className="text-muted-foreground">Matches Won</span>
                   <span className="font-bold">{team.stats?.wins || 0}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                   <span className="text-muted-foreground">Matches Lost</span>
                   <span className="font-bold text-red-400">{team.stats?.losses || 0}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                   <span className="text-muted-foreground">Toss Wins</span>
                   <span className="font-bold">{team.stats?.toss_wins || 0}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50">
+                <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
                   <span className="text-muted-foreground">Seasons Played</span>
                   <span className="font-bold text-amber-400">{team.seasons?.length || 0}</span>
                 </div>

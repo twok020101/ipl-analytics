@@ -29,7 +29,7 @@ import Link from "next/link";
 /** Horizontal bar used in the prediction cards */
 function ProbBar({ value, color }: { value: number; color: string }) {
   return (
-    <div className="h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+    <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
       <div
         className={cn("h-full rounded-full transition-all duration-700", color)}
         style={{ width: `${Math.max(value, 1)}%` }}
@@ -48,7 +48,7 @@ function StrengthDots({ rating }: { rating: number }) {
           key={i}
           className={cn(
             "h-1.5 w-1.5 rounded-full",
-            i <= filled ? "bg-primary" : "bg-gray-700",
+            i <= filled ? "bg-primary" : "bg-muted-strong",
           )}
         />
       ))}
@@ -86,25 +86,25 @@ export default function PredictionsPage() {
       {/* Summary stats */}
       {data && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Card className="bg-gray-900/50">
+          <Card className="bg-card/50">
             <CardContent className="p-3 sm:p-4 text-center">
               <p className="text-xs text-muted-foreground">Completed</p>
               <p className="text-xl font-bold mt-1">{data.completed_matches}</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900/50">
+          <Card className="bg-card/50">
             <CardContent className="p-3 sm:p-4 text-center">
               <p className="text-xs text-muted-foreground">Remaining</p>
               <p className="text-xl font-bold mt-1">{data.remaining_matches}</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900/50">
+          <Card className="bg-card/50">
             <CardContent className="p-3 sm:p-4 text-center">
               <p className="text-xs text-muted-foreground">Simulations</p>
               <p className="text-xl font-bold mt-1">{data.simulations.toLocaleString()}</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900/50">
+          <Card className="bg-card/50">
             <CardContent className="p-3 sm:p-4 text-center">
               <p className="text-xs text-muted-foreground">Playoff Spots</p>
               <p className="text-xl font-bold mt-1">4</p>
@@ -169,7 +169,7 @@ export default function PredictionsPage() {
                     {/* Main probability badge */}
                     <div className={cn(
                       "text-center px-3 py-1.5 rounded-lg shrink-0",
-                      isQualifying ? "bg-green-500/10" : isBorderline ? "bg-yellow-500/10" : "bg-gray-800",
+                      isQualifying ? "bg-green-500/10" : isBorderline ? "bg-yellow-500/10" : "bg-muted",
                     )}>
                       <p className={cn(
                         "text-xl font-bold",
@@ -218,7 +218,7 @@ export default function PredictionsPage() {
                   </div>
 
                   {/* Footer stats */}
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-border text-xs text-muted-foreground">
                     <span>
                       NRR: <span className={team.current_nrr >= 0 ? "text-green-400" : "text-red-400"}>
                         {team.current_nrr >= 0 ? "+" : ""}{team.current_nrr.toFixed(3)}

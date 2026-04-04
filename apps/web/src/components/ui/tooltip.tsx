@@ -22,7 +22,7 @@ function Tooltip({ content, children, className }: TooltipProps) {
       {show && (
         <div
           className={cn(
-            "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs rounded-lg bg-gray-700 text-foreground shadow-lg whitespace-nowrap z-50 animate-fade-in",
+            "absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs rounded-lg bg-muted-strong text-foreground shadow-lg whitespace-nowrap z-50 animate-fade-in",
             className
           )}
         >

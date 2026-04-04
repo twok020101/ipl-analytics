@@ -30,7 +30,7 @@ function CompareStat({
   const better1 = higherIsBetter ? val1 > val2 : val1 < val2;
   const better2 = higherIsBetter ? val2 > val1 : val2 < val1;
   return (
-    <div className="grid grid-cols-3 gap-2 items-center py-2.5 border-b border-gray-800/50 last:border-0">
+    <div className="grid grid-cols-3 gap-2 items-center py-2.5 border-b border-border/50 last:border-0">
       <div className={cn("text-right font-semibold text-sm", better1 && "text-green-400")}>
         {fmt(val1)}
       </div>
@@ -47,7 +47,7 @@ function CompareSection({ title, name1, name2, children }: { title: string; name
     <Card>
       <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-2 items-center pb-2 border-b border-gray-700 mb-1">
+        <div className="grid grid-cols-3 gap-2 items-center pb-2 border-b border-border-strong mb-1">
           <div className="text-right text-xs font-medium text-primary">{name1.split(" ").pop()}</div>
           <div className="text-center text-xs font-medium text-muted-foreground">Stat</div>
           <div className="text-left text-xs font-medium text-red-400">{name2.split(" ").pop()}</div>
@@ -307,7 +307,7 @@ export default function HeadToHeadPage() {
                       <p className="text-xs sm:text-sm text-muted-foreground mt-1">{teamResult.team2.name}</p>
                     </div>
                   </div>
-                  <div className="mt-6 h-3 rounded-full bg-gray-800 overflow-hidden flex">
+                  <div className="mt-6 h-3 rounded-full bg-muted overflow-hidden flex">
                     {teamResult.total_matches > 0 && (
                       <>
                         <div
@@ -336,7 +336,7 @@ export default function HeadToHeadPage() {
                   <CardContent>
                     <div className="space-y-2">
                       {teamResult.recent_matches.map((m, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50">
+                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                           <div>
                             <p className="text-sm font-medium">{m.winner}</p>
                             <p className="text-xs text-muted-foreground">{m.season}</p>
@@ -420,7 +420,7 @@ export default function HeadToHeadPage() {
                       { label: "Average", value: playerResult.average?.toFixed(1) || "N/A", color: "text-green-400" },
                       { label: "Dots", value: playerResult.dots },
                     ].map((stat) => (
-                      <div key={stat.label} className="text-center p-4 rounded-xl bg-gray-800/50">
+                      <div key={stat.label} className="text-center p-4 rounded-xl bg-muted/50">
                         <p className="text-xs text-muted-foreground">{stat.label}</p>
                         <p className={cn("text-xl sm:text-2xl font-bold mt-1", stat.color)}>
                           {stat.value}
@@ -429,11 +429,11 @@ export default function HeadToHeadPage() {
                     ))}
                   </div>
                   <div className="grid grid-cols-2 gap-4 mt-4">
-                    <div className="text-center p-4 rounded-xl bg-gray-800/50">
+                    <div className="text-center p-4 rounded-xl bg-muted/50">
                       <p className="text-xs text-muted-foreground">Fours</p>
                       <p className="text-xl font-bold text-cyan-400">{playerResult.fours}</p>
                     </div>
-                    <div className="text-center p-4 rounded-xl bg-gray-800/50">
+                    <div className="text-center p-4 rounded-xl bg-muted/50">
                       <p className="text-xs text-muted-foreground">Sixes</p>
                       <p className="text-xl font-bold text-purple-400">{playerResult.sixes}</p>
                     </div>

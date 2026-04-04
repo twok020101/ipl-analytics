@@ -28,6 +28,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { cn, getTeamColor, getTeamTextColor, getTeamBg, timeAgo } from "@/lib/utils";
+import { useChartColors } from "@/hooks/useChartColors";
 import {
   LineChart,
   Line,
@@ -67,7 +68,7 @@ function getPhaseColor(phase?: string) {
     case "powerplay": return "text-green-400 bg-green-500/10 border-green-500/30";
     case "middle": return "text-amber-400 bg-amber-500/10 border-amber-500/30";
     case "death": return "text-red-400 bg-red-500/10 border-red-500/30";
-    default: return "text-gray-400 bg-gray-500/10 border-gray-500/30";
+    default: return "text-muted-foreground bg-muted border-border";
   }
 }
 
@@ -86,7 +87,7 @@ function WinProbabilityBar({ team1, team2, winProb }: { team1: string; team2: st
         <span className={getTeamTextColor(team1)}>{team1} {t1Prob.toFixed(1)}%</span>
         <span className={getTeamTextColor(team2)}>{t2Prob.toFixed(1)}% {team2}</span>
       </div>
-      <div className="h-3 rounded-full overflow-hidden flex bg-gray-800">
+      <div className="h-3 rounded-full overflow-hidden flex bg-muted">
         <div
           className="h-full transition-all duration-1000 ease-in-out rounded-l-full"
           style={{ width: `${t1Prob}%`, backgroundColor: t1Color }}
@@ -106,7 +107,7 @@ function LiveMatchCard({ match }: { match: LiveMatch }) {
   const phase = gp?.phase;
 
   return (
-    <Card className="border-gray-700/50">
+    <Card className="border-border-strong/50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -165,18 +166,18 @@ function LiveMatchCard({ match }: { match: LiveMatch }) {
         {/* Chase info for 2nd innings */}
         {match.innings === 2 && gp && (
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">Need</p>
               <p className="text-lg font-bold text-foreground">{gp.runs_needed}</p>
               <p className="text-xs text-muted-foreground">from {gp.balls_remaining}b</p>
             </div>
-            <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">Req. RR</p>
               <p className={cn("text-lg font-bold", (gp.required_rate ?? 0) > 10 ? "text-red-400" : (gp.required_rate ?? 0) > 8 ? "text-amber-400" : "text-green-400")}>
                 {gp.required_rate?.toFixed(2)}
               </p>
             </div>
-            <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">Curr. RR</p>
               <p className="text-lg font-bold text-foreground">{gp.current_rate?.toFixed(2)}</p>
             </div>
@@ -186,15 +187,15 @@ function LiveMatchCard({ match }: { match: LiveMatch }) {
         {/* 1st innings projected */}
         {match.innings === 1 && gp && (
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">Projected</p>
               <p className="text-lg font-bold text-foreground">{gp.projected_score}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">Par</p>
               <p className="text-lg font-bold text-muted-foreground">{gp.par_score}</p>
             </div>
-            <div className="bg-gray-800/50 rounded-lg p-2">
+            <div className="bg-muted/50 rounded-lg p-2">
               <p className="text-xs text-muted-foreground">Situation</p>
               <p className={cn("text-sm font-bold capitalize", gp.situation === "above_par" ? "text-green-400" : gp.situation === "below_par" ? "text-red-400" : "text-amber-400")}>
                 {gp.situation?.replace("_", " ")}
@@ -306,14 +307,14 @@ function WeatherPanel({ weather }: { weather: WeatherData }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Wind className="h-4 w-4 text-gray-400" />
+            <Wind className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Wind</p>
               <p className="text-sm font-medium">{weather.wind_speed_kmh} km/h</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Cloud className="h-4 w-4 text-gray-500" />
+            <Cloud className="h-4 w-4 text-muted-foreground" />
             <div>
               <p className="text-xs text-muted-foreground">Cloud</p>
               <p className="text-sm font-medium">{weather.cloud_cover_pct}%</p>
@@ -353,6 +354,7 @@ function WeatherPanel({ weather }: { weather: WeatherData }) {
 }
 
 function WinProbChart({ match, history }: { match: LiveMatch; history: HistorySnapshot[] }) {
+  const c = useChartColors();
   const t1 = match.team1;
   const t2 = match.team2;
   const t1Color = getTeamColor(t1);
@@ -405,25 +407,25 @@ function WinProbChart({ match, history }: { match: LiveMatch; history: HistorySn
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
               <XAxis
                 dataKey="over"
-                stroke="#6B7280"
+                stroke={c.axis}
                 tick={{ fontSize: 12 }}
-                label={{ value: "Overs", position: "insideBottom", offset: -2, style: { fill: "#6B7280", fontSize: 11 } }}
+                label={{ value: "Overs", position: "insideBottom", offset: -2, style: { fill: c.tick, fontSize: 11 } }}
               />
               <YAxis
                 domain={[0, 100]}
-                stroke="#6B7280"
+                stroke={c.axis}
                 tick={{ fontSize: 12 }}
-                label={{ value: "Win %", angle: -90, position: "insideLeft", style: { fill: "#6B7280", fontSize: 11 } }}
+                label={{ value: "Win %", angle: -90, position: "insideLeft", style: { fill: c.tick, fontSize: 11 } }}
               />
               <Tooltip
-                contentStyle={{ backgroundColor: "#1F2937", border: "1px solid #374151", borderRadius: "8px" }}
-                labelStyle={{ color: "#9CA3AF" }}
+                contentStyle={{ backgroundColor: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: "8px" }}
+                labelStyle={{ color: c.tick }}
                 labelFormatter={(v) => `Over ${v}`}
               />
-              <ReferenceLine y={50} stroke="#4B5563" strokeDasharray="3 3" />
+              <ReferenceLine y={50} stroke={c.axis} strokeDasharray="3 3" />
               <Line type="monotone" dataKey={t1} stroke={t1Color} strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey={t2} stroke={t2Color} strokeWidth={2} dot={false} />
             </LineChart>
@@ -436,7 +438,7 @@ function WinProbChart({ match, history }: { match: LiveMatch; history: HistorySn
 
 function UpcomingMatchCard({ match }: { match: LiveUpcomingMatch }) {
   return (
-    <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg">
+    <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
       <div>
         <p className="text-sm font-medium">
           <span className={getTeamTextColor(match.team1)}>{match.team1}</span>
@@ -452,7 +454,7 @@ function UpcomingMatchCard({ match }: { match: LiveUpcomingMatch }) {
 
 function ResultCard({ match }: { match: LiveRecentResult }) {
   return (
-    <div className="p-3 bg-gray-800/30 rounded-lg">
+    <div className="p-3 bg-muted/30 rounded-lg">
       <div className="flex justify-between items-center">
         <div>
           <span className={cn("text-sm font-medium", getTeamTextColor(match.team1))}>{match.team1}</span>

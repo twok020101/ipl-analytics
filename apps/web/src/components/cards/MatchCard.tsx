@@ -29,7 +29,7 @@ export function MatchCard({
   return (
     <div
       className={cn(
-        "rounded-xl border border-gray-800 bg-gray-900 p-4 transition-all duration-200 hover:border-gray-700",
+        "rounded-xl border border-border bg-card p-4 transition-all duration-200 hover:border-border-strong",
         className
       )}
     >
@@ -39,7 +39,7 @@ export function MatchCard({
           {score1 && <p className="text-sm text-muted-foreground mt-0.5">{score1}</p>}
         </div>
         <div className="px-4">
-          <span className="text-xs font-bold text-muted-foreground bg-gray-800 px-2.5 py-1 rounded-full">
+          <span className="text-xs font-bold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">
             VS
           </span>
         </div>
@@ -48,7 +48,7 @@ export function MatchCard({
           {score2 && <p className="text-sm text-muted-foreground mt-0.5">{score2}</p>}
         </div>
       </div>
-      <div className="mt-3 pt-3 border-t border-gray-800">
+      <div className="mt-3 pt-3 border-t border-border">
         <p className="text-xs text-center">
           <span className="text-primary font-medium">{winner}</span>
           <span className="text-muted-foreground"> {result}</span>
