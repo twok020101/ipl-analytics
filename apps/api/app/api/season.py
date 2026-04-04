@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
 from app.api.deps import get_db, require_viewer
-from app.models.models import Match, Team, Delivery, User
+from app.models.models import Match, Team, Delivery, User, Venue
 from app.services.season_predictor import predict_season
 from app.services.cricapi_utils import cricket_overs_to_decimal, resolve_batting_order
 from typing import Dict
@@ -175,6 +175,52 @@ def get_standings(season: str, db: Session = Depends(get_db)):
         "season": season,
         "standings": sorted_standings,
     }
+
+
+@router.get("/{season}/matches")
+def list_matches(season: str, ended_only: bool = False, db: Session = Depends(get_db)):
+    """List all matches for a season with team names, date, venue, and result."""
+    q = db.query(Match).filter(Match.season == season)
+    if ended_only:
+        q = q.filter(Match.match_ended == True)
+    matches = q.order_by(Match.date.desc(), Match.id.desc()).all()
+    if not matches:
+        raise HTTPException(status_code=404, detail=f"No matches found for season '{season}'")
+
+    all_team_ids = {tid for m in matches for tid in [m.team1_id, m.team2_id, m.winner_id] if tid}
+    team_cache = {t.id: t for t in db.query(Team).filter(Team.id.in_(all_team_ids)).all()}
+
+    all_venue_ids = {m.venue_id for m in matches if m.venue_id}
+    venue_cache = {v.id: v for v in db.query(Venue).filter(Venue.id.in_(all_venue_ids)).all()} if all_venue_ids else {}
+
+    result = []
+    for m in matches:
+        t1 = team_cache.get(m.team1_id)
+        t2 = team_cache.get(m.team2_id)
+        w = team_cache.get(m.winner_id) if m.winner_id else None
+        v = venue_cache.get(m.venue_id) if m.venue_id else None
+
+        summary = None
+        if w and m.win_margin and m.win_type:
+            summary = f"{w.short_name} won by {m.win_margin} {m.win_type}"
+        elif m.status_text:
+            summary = m.status_text
+
+        result.append({
+            "id": m.id,
+            "date": str(m.date) if m.date else None,
+            "team1": t1.short_name if t1 else "?",
+            "team2": t2.short_name if t2 else "?",
+            "team1_name": t1.name if t1 else "Unknown",
+            "team2_name": t2.name if t2 else "Unknown",
+            "venue": v.name if v else None,
+            "city": v.city if v else None,
+            "winner": w.short_name if w else None,
+            "result": summary,
+            "match_ended": m.match_ended or False,
+        })
+
+    return result
 
 
 @router.get("/{season}/predictions")

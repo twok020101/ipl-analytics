@@ -176,6 +176,24 @@ export interface SeasonPredictionResult {
 export const fetchSeasonPredictions = (season: string) =>
   fetchAPI<SeasonPredictionResult>(`/seasons/${season}/predictions`);
 
+// Season matches (for match picker)
+export interface SeasonMatch {
+  id: number;
+  date: string | null;
+  team1: string;
+  team2: string;
+  team1_name: string;
+  team2_name: string;
+  venue: string | null;
+  city: string | null;
+  winner: string | null;
+  result: string | null;
+  match_ended: boolean;
+}
+
+export const fetchSeasonMatches = (season: string, endedOnly = false) =>
+  fetchAPI<SeasonMatch[]>(`/seasons/${season}/matches${endedOnly ? "?ended_only=true" : ""}`);
+
 // Comprehensive Match Analysis
 export const fetchMatchAnalysis = (data: { team1: string; team2: string; venue_id: number }) =>
   fetchAPI<Record<string, unknown>>("/analysis/match", { method: "POST", body: JSON.stringify(data) });
