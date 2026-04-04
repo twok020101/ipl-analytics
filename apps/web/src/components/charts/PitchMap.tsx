@@ -44,7 +44,7 @@ export function PitchMap({ wicketTypes, mode }: PitchMapProps) {
                 <span className="text-muted-foreground text-xs">({w.pct}%)</span>
               </span>
             </div>
-            <div className="h-5 rounded-full bg-gray-800 overflow-hidden">
+            <div className="h-5 rounded-full bg-muted overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700"
                 style={{ width: `${widthPct}%`, backgroundColor: color }}

@@ -27,6 +27,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { cn, getTeamTextColor, getTeamColor } from "@/lib/utils";
+import { useChartColors } from "@/hooks/useChartColors";
 import {
   AreaChart,
   Area,
@@ -102,7 +103,7 @@ function ChartTooltip({ active, payload, analysis }: {
   if (!data) return null;
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl">
+    <div className="bg-card border border-border-strong rounded-lg px-3 py-2 text-xs shadow-xl">
       <p className="font-medium mb-1">
         {data.innings === 1 ? "1st" : "2nd"} Innings — Over {data.over}
       </p>
@@ -143,7 +144,7 @@ function MatchCard({
         "w-full text-left p-3 rounded-lg border transition-all",
         isSelected
           ? "border-primary bg-primary/10 ring-1 ring-primary"
-          : "border-gray-700/50 bg-gray-800/50 hover:border-gray-600 hover:bg-gray-800",
+          : "border-border-strong/50 bg-muted/50 hover:border-border-strong hover:bg-muted",
       )}
     >
       <div className="flex items-center justify-between gap-2">
@@ -189,6 +190,7 @@ function MatchCard({
 }
 
 export default function MatchAnalysisPage() {
+  const c = useChartColors();
   const [season, setSeason] = useState("2026");
   const [selectedMatchId, setSelectedMatchId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -283,7 +285,7 @@ export default function MatchAnalysisPage() {
                 placeholder="Search team, city..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full pl-8 pr-3 py-2 bg-muted border border-border-strong rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>
@@ -400,19 +402,19 @@ export default function MatchAnalysisPage() {
                             <stop offset="95%" stopColor={getTeamColor(analysis.bat_first.short_name)} stopOpacity={0} />
                           </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
                         <XAxis
                           dataKey="label"
-                          tick={{ fontSize: 10, fill: "#9CA3AF" }}
+                          tick={{ fontSize: 10, fill: c.tick }}
                           interval="preserveStartEnd"
                         />
                         <YAxis
                           domain={[0, 100]}
-                          tick={{ fontSize: 10, fill: "#9CA3AF" }}
+                          tick={{ fontSize: 10, fill: c.tick }}
                           tickFormatter={(v) => `${v}%`}
                         />
                         <Tooltip content={<ChartTooltip analysis={analysis} />} />
-                        <ReferenceLine y={50} stroke="#6B7280" strokeDasharray="5 5" />
+                        <ReferenceLine y={50} stroke={c.axis} strokeDasharray="5 5" />
                         {inningsBreak > 0 && (
                           <ReferenceLine
                             x={chartData[inningsBreak]?.label}
@@ -474,7 +476,7 @@ export default function MatchAnalysisPage() {
                     {analysis.turning_points.map((tp: TurningPoint, i: number) => (
                       <div
                         key={i}
-                        className="flex items-start gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-700/50"
+                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border-strong/50"
                       >
                         <TurningPointIcon type={tp.type} />
                         <div className="flex-1 min-w-0">

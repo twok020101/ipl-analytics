@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WinProbGauge } from "@/components/charts/WinProbGauge";
 import { cn, getTeamTextColor } from "@/lib/utils";
+import { useChartColors } from "@/hooks/useChartColors";
 import {
   BarChart,
   Bar,
@@ -218,12 +219,13 @@ function roleTag(role: string) {
   if (role === "Batting Allrounder") return { label: "BAT AR", color: "bg-purple-500/15 text-purple-400 border-purple-500/20" };
   if (role === "Bowling Allrounder") return { label: "BOWL AR", color: "bg-orange-500/15 text-orange-400 border-orange-500/20" };
   if (role === "Bowler") return { label: "BOWL", color: "bg-red-500/15 text-red-400 border-red-500/20" };
-  return { label: role.substring(0, 6).toUpperCase(), color: "bg-gray-500/15 text-gray-400 border-gray-500/20" };
+  return { label: role.substring(0, 6).toUpperCase(), color: "bg-muted text-muted-foreground border-border" };
 }
 
 const PHASE_COLORS = { powerplay: "#4ade80", middle: "#60a5fa", death: "#f87171" };
 
 function PhaseBarChart({ data, label }: { data: { phase: string; value: number | null }[]; label: string }) {
+  const c = useChartColors();
   const filtered = data.filter((d) => d.value != null && d.value > 0);
   if (filtered.length === 0) return null;
   return (
@@ -233,14 +235,14 @@ function PhaseBarChart({ data, label }: { data: { phase: string; value: number |
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={filtered} layout="vertical" margin={{ left: 2, right: 4, top: 0, bottom: 0 }}>
             <XAxis type="number" hide />
-            <YAxis type="category" dataKey="phase" width={40} tick={{ fontSize: 9, fill: "#9ca3af" }} />
+            <YAxis type="category" dataKey="phase" width={40} tick={{ fontSize: 9, fill: c.tick }} />
             <Tooltip
-              contentStyle={{ background: "#1f2937", border: "1px solid #374151", borderRadius: 8, fontSize: 11 }}
+              contentStyle={{ background: c.tooltipBg, border: `1px solid ${c.tooltipBorder}`, borderRadius: 8, fontSize: 11 }}
               formatter={(v: number) => [v.toFixed(1), label]}
             />
             <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={12}>
               {filtered.map((entry) => (
-                <Cell key={entry.phase} fill={PHASE_COLORS[entry.phase as keyof typeof PHASE_COLORS] || "#9ca3af"} />
+                <Cell key={entry.phase} fill={PHASE_COLORS[entry.phase as keyof typeof PHASE_COLORS] || c.tick} />
               ))}
             </Bar>
           </BarChart>
@@ -420,7 +422,7 @@ function PredictPage() {
                     onClick={() => selectFixture(fix)}
                     className={cn(
                       "shrink-0 rounded-lg border p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 min-w-[180px]",
-                      isToday ? "border-amber-500/40 bg-amber-500/5" : "border-gray-800 bg-gray-900"
+                      isToday ? "border-amber-500/40 bg-amber-500/5" : "border-border bg-card"
                     )}
                   >
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
@@ -453,7 +455,7 @@ function PredictPage() {
               <Select options={teamOptions} placeholder="Select Team 1" value={team1} onChange={(e) => { setTeam1(e.target.value); clearResults(); }} />
             </div>
             <div className="flex items-center justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-cyan-500/20 border border-gray-700">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-cyan-500/20 border border-border-strong">
                 <span className="text-base font-extrabold text-primary">VS</span>
               </div>
             </div>
@@ -548,7 +550,7 @@ function PredictPage() {
                   </div>
                   <div className="mt-4 flex flex-wrap justify-center gap-2">
                     {(analysis.prediction.key_factors || []).map((kf, i) => (
-                      <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-800/50 text-xs">
+                      <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/50 text-xs">
                         <CheckCircle className="h-3 w-3 text-green-400" />
                         {kf}
                       </div>
@@ -598,7 +600,7 @@ function PredictPage() {
                                 "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold",
                                 r === "team1" ? "bg-green-500/20 text-green-400"
                                   : r === "team2" ? "bg-red-500/20 text-red-400"
-                                  : "bg-gray-700 text-gray-400"
+                                  : "bg-muted-strong text-muted-foreground"
                               )}
                             >
                               {r === "team1" ? "W" : r === "team2" ? "L" : "-"}
@@ -670,7 +672,7 @@ function PredictPage() {
                                 <p className="text-sm text-muted-foreground italic">{summary}</p>
                               )}
                               {updates && updates.length > 0 && updates.map((u, i) => (
-                                <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-gray-800/50">
+                                <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-muted/50">
                                   <div className={cn(
                                     "w-2 h-2 rounded-full shrink-0",
                                     u.status === "fit" ? "bg-green-500" :
@@ -744,7 +746,7 @@ function PredictPage() {
                       </p>
                       <div className="space-y-1">
                         {rec.reasoning.map((r, i) => (
-                          <div key={i} className="flex items-start gap-2 p-1.5 rounded bg-gray-800/50 text-xs">
+                          <div key={i} className="flex items-start gap-2 p-1.5 rounded bg-muted/50 text-xs">
                             <CheckCircle className="h-3 w-3 text-green-400 mt-0.5 shrink-0" />
                             <span>{r}</span>
                           </div>
@@ -870,7 +872,7 @@ function PredictPage() {
                         <CardContent>
                           <div className="grid grid-cols-3 gap-4">
                             {Object.entries(gp.phase_targets).map(([phase, targets]) => (
-                              <div key={phase} className="text-center p-3 rounded-xl bg-gray-800/50">
+                              <div key={phase} className="text-center p-3 rounded-xl bg-muted/50">
                                 <p className="text-xs font-medium capitalize text-muted-foreground">{phase}</p>
                                 <p className="text-xl font-bold text-primary mt-1">{targets.target_runs}</p>
                                 <p className="text-[10px] text-muted-foreground">max {targets.target_wickets_max} wkts</p>
@@ -887,7 +889,7 @@ function PredictPage() {
                       <CardContent>
                         <div className="space-y-1.5">
                           {(gp.batting_order || []).map((b) => (
-                            <div key={b.position} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-800/50">
+                            <div key={b.position} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/50">
                               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold">{b.position}</span>
                               <div className="flex-1">
                                 <p className="font-medium text-sm">{b.name}</p>
@@ -929,10 +931,10 @@ function PredictPage() {
                     <Card>
                       <CardHeader><CardTitle className="text-base"><Zap className="h-4 w-4 text-green-400 inline mr-2" />{bowlingTeam.short_name} Over-by-Over Bowling</CardTitle></CardHeader>
                       <CardContent>
-                        <div className="rounded-lg border border-gray-800 overflow-x-auto">
+                        <div className="rounded-lg border border-border overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="bg-gray-800/50 border-b border-gray-800">
+                              <tr className="bg-muted/50 border-b border-border">
                                 <th className="px-3 py-2 text-left text-xs text-muted-foreground">Over</th>
                                 <th className="px-3 py-2 text-left text-xs text-muted-foreground">Bowler</th>
                                 <th className="px-3 py-2 text-center text-xs text-muted-foreground">Phase</th>
@@ -942,7 +944,7 @@ function PredictPage() {
                             </thead>
                             <tbody>
                               {(gp.bowling_plan || []).map((o) => (
-                                <tr key={o.over} className={cn("border-b border-gray-800/50", o.over <= 6 ? "bg-blue-500/5" : o.over >= 16 ? "bg-red-500/5" : "")}>
+                                <tr key={o.over} className={cn("border-b border-border/50", o.over <= 6 ? "bg-blue-500/5" : o.over >= 16 ? "bg-red-500/5" : "")}>
                                   <td className="px-3 py-2 font-bold">{o.over}</td>
                                   <td className="px-3 py-2 font-medium">{o.bowler_name}</td>
                                   <td className="px-3 py-2 text-center"><Badge variant="outline" className="text-xs capitalize">{o.phase}</Badge></td>
@@ -1036,8 +1038,8 @@ function TeamAnalysisTab({ analysis, teamName, teamShort }: {
             {sorted.map((p, i) => {
               const tag = roleTag(p.role);
               return (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-700 text-xs font-bold text-gray-300">{i + 1}</span>
+                <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted-strong text-xs font-bold text-foreground">{i + 1}</span>
                   <Badge className={cn("text-[10px] font-bold px-2 py-0.5 border shrink-0 w-16 justify-center", tag.color)}>{tag.label}</Badge>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{p.name}</p>
@@ -1052,7 +1054,7 @@ function TeamAnalysisTab({ analysis, teamName, teamShort }: {
           </div>
 
           {/* Impact Players */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 rounded-lg bg-gray-800/30 border border-gray-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 p-4 rounded-lg bg-muted/30 border border-border">
             <div>
               <p className="text-xs text-muted-foreground mb-1">Impact Player (Bat First)</p>
               <div className="flex items-center gap-2">
@@ -1125,7 +1127,7 @@ function BatterCard({ batter }: { batter: TopBatter }) {
   ];
 
   return (
-    <div className="p-4 rounded-xl bg-gray-800/40 border border-gray-800 space-y-3">
+    <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <Badge className={cn("text-[10px] font-bold px-2 py-0.5 border", tag.color)}>{tag.label}</Badge>
@@ -1143,7 +1145,7 @@ function BatterCard({ batter }: { batter: TopBatter }) {
           { label: "50s", val: batter.career["50s"] },
           { label: "100s", val: batter.career["100s"] },
         ].map((s) => (
-          <div key={s.label} className="p-1.5 rounded bg-gray-700/50">
+          <div key={s.label} className="p-1.5 rounded bg-muted-strong/50">
             <p className="text-[10px] text-muted-foreground">{s.label}</p>
             <p className="text-xs font-bold">{s.val}</p>
           </div>
@@ -1165,7 +1167,7 @@ function BatterCard({ batter }: { batter: TopBatter }) {
                 { label: "Avg", val: batter.vs_opposition.avg.toFixed(1) },
                 { label: "SR", val: batter.vs_opposition.sr.toFixed(1) },
               ].map((s) => (
-                <div key={s.label} className="p-1 rounded bg-gray-700/30 text-[10px]">
+                <div key={s.label} className="p-1 rounded bg-muted-strong/30 text-[10px]">
                   <span className="text-muted-foreground">{s.label}: </span>
                   <span className="font-bold">{s.val}</span>
                 </div>
@@ -1192,7 +1194,7 @@ function BatterCard({ batter }: { batter: TopBatter }) {
             {batter.recent_form.last_5_scores.map((s, i) => (
               <span key={i} className={cn(
                 "px-1.5 py-0.5 rounded text-[10px] font-bold",
-                s >= 50 ? "bg-green-500/20 text-green-400" : s >= 30 ? "bg-blue-500/20 text-blue-400" : "bg-gray-700 text-gray-300"
+                s >= 50 ? "bg-green-500/20 text-green-400" : s >= 30 ? "bg-blue-500/20 text-blue-400" : "bg-muted-strong text-foreground"
               )}>{s}</span>
             ))}
           </div>
@@ -1225,7 +1227,7 @@ function BowlerCard({ bowler }: { bowler: TopBowler }) {
   ];
 
   return (
-    <div className="p-4 rounded-xl bg-gray-800/40 border border-gray-800 space-y-3">
+    <div className="p-4 rounded-xl bg-muted/50 border border-border space-y-3">
       {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <Badge className={cn("text-[10px] font-bold px-2 py-0.5 border", tag.color)}>{tag.label}</Badge>
@@ -1242,7 +1244,7 @@ function BowlerCard({ bowler }: { bowler: TopBowler }) {
           { label: "Avg", val: bowler.career.avg.toFixed(1) },
           { label: "SR", val: bowler.career.sr.toFixed(1) },
         ].map((s) => (
-          <div key={s.label} className="p-1.5 rounded bg-gray-700/50">
+          <div key={s.label} className="p-1.5 rounded bg-muted-strong/50">
             <p className="text-[10px] text-muted-foreground">{s.label}</p>
             <p className="text-xs font-bold">{s.val}</p>
           </div>
@@ -1259,8 +1261,8 @@ function BowlerCard({ bowler }: { bowler: TopBowler }) {
             <div>
               <p className="text-[10px] text-muted-foreground mb-1">vs Opposition</p>
               <div className="flex gap-2 text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-gray-700/30"><span className="text-muted-foreground">W:</span> <span className="font-bold">{bowler.vs_opposition.wickets}</span></span>
-                <span className="px-1.5 py-0.5 rounded bg-gray-700/30"><span className="text-muted-foreground">Econ:</span> <span className="font-bold">{bowler.vs_opposition.economy.toFixed(2)}</span></span>
+                <span className="px-1.5 py-0.5 rounded bg-muted-strong/30"><span className="text-muted-foreground">W:</span> <span className="font-bold">{bowler.vs_opposition.wickets}</span></span>
+                <span className="px-1.5 py-0.5 rounded bg-muted-strong/30"><span className="text-muted-foreground">Econ:</span> <span className="font-bold">{bowler.vs_opposition.economy.toFixed(2)}</span></span>
               </div>
             </div>
           )}
@@ -1268,8 +1270,8 @@ function BowlerCard({ bowler }: { bowler: TopBowler }) {
             <div>
               <p className="text-[10px] text-muted-foreground mb-1">At Venue</p>
               <div className="flex gap-2 text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-gray-700/30"><span className="text-muted-foreground">W:</span> <span className="font-bold">{bowler.at_venue.wickets}</span></span>
-                <span className="px-1.5 py-0.5 rounded bg-gray-700/30"><span className="text-muted-foreground">Econ:</span> <span className="font-bold">{bowler.at_venue.economy.toFixed(2)}</span></span>
+                <span className="px-1.5 py-0.5 rounded bg-muted-strong/30"><span className="text-muted-foreground">W:</span> <span className="font-bold">{bowler.at_venue.wickets}</span></span>
+                <span className="px-1.5 py-0.5 rounded bg-muted-strong/30"><span className="text-muted-foreground">Econ:</span> <span className="font-bold">{bowler.at_venue.economy.toFixed(2)}</span></span>
               </div>
             </div>
           )}
@@ -1307,10 +1309,10 @@ function MatchupTable({ title, matchups }: { title: string; matchups: MatchupEnt
     <Card>
       <CardHeader><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent>
-        <div className="rounded-lg border border-gray-800 overflow-x-auto">
+        <div className="rounded-lg border border-border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-800/50 border-b border-gray-800">
+              <tr className="bg-muted/50 border-b border-border">
                 <th className="px-3 py-2 text-left text-xs text-muted-foreground">Batter</th>
                 <th className="px-3 py-2 text-left text-xs text-muted-foreground">Bowler</th>
                 <th className="px-3 py-2 text-center text-xs text-muted-foreground">Balls</th>
@@ -1328,7 +1330,7 @@ function MatchupTable({ title, matchups }: { title: string; matchups: MatchupEnt
                     ? "bg-red-500/10"
                     : "";
                 return (
-                  <tr key={i} className={cn("border-b border-gray-800/50", srBg)}>
+                  <tr key={i} className={cn("border-b border-border/50", srBg)}>
                     <td className="px-3 py-2 font-medium">{m.batter}</td>
                     <td className="px-3 py-2">{m.bowler}</td>
                     <td className="px-3 py-2 text-center">{m.balls}</td>

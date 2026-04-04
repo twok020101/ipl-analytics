@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { useChartColors } from "@/hooks/useChartColors";
 
 interface FormLineChartProps {
   data: { label: string; runs: number; balls?: number; opponent?: string }[];
@@ -17,36 +18,37 @@ interface FormLineChartProps {
 }
 
 export function FormLineChart({ data, color = "#3b82f6" }: FormLineChartProps) {
+  const c = useChartColors();
   const avg = data.length > 0 ? data.reduce((a, b) => a + b.runs, 0) / data.length : 0;
 
   return (
     <div className="w-full h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+          <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
           <XAxis
             dataKey="label"
-            tick={{ fill: "#9ca3af", fontSize: 11 }}
-            axisLine={{ stroke: "#374151" }}
+            tick={{ fill: c.tick, fontSize: 11 }}
+            axisLine={{ stroke: c.axis }}
           />
           <YAxis
-            tick={{ fill: "#9ca3af", fontSize: 11 }}
-            axisLine={{ stroke: "#374151" }}
+            tick={{ fill: c.tick, fontSize: 11 }}
+            axisLine={{ stroke: c.axis }}
           />
           <RechartsTooltip
             contentStyle={{
-              backgroundColor: "#1f2937",
-              border: "1px solid #374151",
+              backgroundColor: c.tooltipBg,
+              border: `1px solid ${c.tooltipBorder}`,
               borderRadius: "8px",
-              color: "#f9fafb",
+              color: c.tooltipText,
             }}
             formatter={(value: number) => [`${value} runs`, "Score"]}
           />
           <ReferenceLine
             y={avg}
-            stroke="#6b7280"
+            stroke={c.axis}
             strokeDasharray="5 5"
-            label={{ value: `Avg: ${avg.toFixed(1)}`, fill: "#9ca3af", fontSize: 11 }}
+            label={{ value: `Avg: ${avg.toFixed(1)}`, fill: c.tick, fontSize: 11 }}
           />
           <Line
             type="monotone"

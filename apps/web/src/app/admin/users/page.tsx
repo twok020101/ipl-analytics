@@ -47,7 +47,7 @@ import {
 const roleBadge: Record<string, { bg: string; icon: typeof Shield }> = {
   admin: { bg: "bg-red-500/20 text-red-400 border-red-500/30", icon: ShieldCheck },
   analyst: { bg: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Shield },
-  viewer: { bg: "bg-gray-500/20 text-gray-400 border-gray-500/30", icon: Eye },
+  viewer: { bg: "bg-muted text-muted-foreground border-border", icon: Eye },
 };
 
 export default function UserManagementPage() {
@@ -164,12 +164,12 @@ export default function UserManagementPage() {
       )}
 
       {/* Tab switcher */}
-      <div className="flex gap-1 bg-gray-800/50 rounded-lg p-1">
+      <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
         <button
           onClick={() => setActiveTab("users")}
           className={cn(
             "flex-1 flex items-center justify-center gap-1.5 text-sm py-2 rounded-md transition-colors",
-            activeTab === "users" ? "bg-gray-700 text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
+            activeTab === "users" ? "bg-muted-strong text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
           )}
         >
           <Shield className="h-3.5 w-3.5" /> Users ({users?.length || 0})
@@ -178,7 +178,7 @@ export default function UserManagementPage() {
           onClick={() => setActiveTab("orgs")}
           className={cn(
             "flex-1 flex items-center justify-center gap-1.5 text-sm py-2 rounded-md transition-colors",
-            activeTab === "orgs" ? "bg-gray-700 text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
+            activeTab === "orgs" ? "bg-muted-strong text-foreground font-medium" : "text-muted-foreground hover:text-foreground",
           )}
         >
           <Building2 className="h-3.5 w-3.5" /> Organizations ({orgs?.length || 0})
@@ -243,13 +243,13 @@ export default function UserManagementPage() {
 
                 {/* Actions — hidden for self */}
                 {!isSelf && (
-                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-800">
+                  <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-border">
                     {/* Role selector */}
                     <select
                       value={u.role}
                       onChange={(e) => roleMutation.mutate({ userId: u.id, role: e.target.value })}
                       disabled={roleMutation.isPending}
-                      className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="text-xs bg-muted border border-border-strong rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       <option value="viewer">Viewer</option>
                       <option value="analyst">Analyst</option>
@@ -267,7 +267,7 @@ export default function UserManagementPage() {
                         });
                       }}
                       disabled={moveOrgMutation.isPending}
-                      className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="text-xs bg-muted border border-border-strong rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       <option value="">No org</option>
                       {(orgs || []).map((o: OrgInfo) => (
@@ -316,12 +316,12 @@ export default function UserManagementPage() {
                 placeholder="Organization name"
                 value={newOrgName}
                 onChange={(e) => setNewOrgName(e.target.value)}
-                className="flex-1 text-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="flex-1 text-sm bg-muted border border-border-strong rounded-lg px-3 py-2 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               />
               <select
                 value={newOrgTeamId}
                 onChange={(e) => setNewOrgTeamId(e.target.value)}
-                className="text-sm bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="text-sm bg-muted border border-border-strong rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="">No team (link later)</option>
                 {activeTeams.map((t) => (
@@ -369,7 +369,7 @@ export default function UserManagementPage() {
                       if (!isNaN(val)) linkTeamMutation.mutate({ teamId: val });
                     }}
                     disabled={linkTeamMutation.isPending}
-                    className="text-xs bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="text-xs bg-muted border border-border-strong rounded-lg px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                   >
                     <option value="">Link team...</option>
                     {activeTeams.map((t) => (

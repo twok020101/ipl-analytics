@@ -102,7 +102,7 @@ export default function AIInsightsPage() {
                 <button
                   key={q}
                   onClick={() => handleSend(q)}
-                  className="text-left p-3 rounded-xl border border-gray-800 bg-gray-900 text-sm text-muted-foreground hover:text-foreground hover:border-gray-700 hover:bg-gray-800 transition-all"
+                  className="text-left p-3 rounded-xl border border-border bg-card text-sm text-muted-foreground hover:text-foreground hover:border-border-strong hover:bg-muted transition-all"
                 >
                   {q}
                 </button>
@@ -136,7 +136,7 @@ export default function AIInsightsPage() {
                 "rounded-2xl px-4 py-3 max-w-[80%]",
                 msg.role === "user"
                   ? "bg-primary text-white"
-                  : "bg-gray-800 text-foreground"
+                  : "bg-muted text-foreground"
               )}
             >
               <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
@@ -152,7 +152,7 @@ export default function AIInsightsPage() {
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10">
               <Bot className="h-4 w-4 text-purple-400" />
             </div>
-            <div className="bg-gray-800 rounded-2xl px-4 py-3">
+            <div className="bg-muted rounded-2xl px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Thinking...
@@ -165,7 +165,7 @@ export default function AIInsightsPage() {
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-800 pt-4">
+      <div className="border-t border-border pt-4">
         <div className="flex items-center gap-3 max-w-3xl mx-auto">
           <Input
             placeholder="Ask about IPL stats, players, teams..."

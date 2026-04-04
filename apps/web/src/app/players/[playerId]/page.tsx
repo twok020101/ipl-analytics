@@ -145,7 +145,7 @@ export default function PlayerDetailPage() {
       </Link>
 
       {/* Player Header */}
-      <div className="rounded-2xl border border-gray-800 bg-gradient-to-br from-gray-900 to-gray-900/50 p-5 sm:p-8">
+      <div className="rounded-2xl border border-border bg-gradient-to-br from-card to-card/50 p-5 sm:p-8">
         <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
           <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-primary/10 shrink-0">
             <User className="h-8 w-8 sm:h-10 sm:w-10 text-primary" />
@@ -162,19 +162,19 @@ export default function PlayerDetailPage() {
         </div>
         {/* Career stats — visible on all sizes */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+          <div className="text-center p-3 rounded-xl bg-muted/50">
             <p className="text-xs text-muted-foreground">Matches</p>
             <p className="text-xl font-bold">{matches}</p>
           </div>
-          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+          <div className="text-center p-3 rounded-xl bg-muted/50">
             <p className="text-xs text-muted-foreground">Runs</p>
             <p className="text-xl font-bold text-amber-400">{runs.toLocaleString()}</p>
           </div>
-          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+          <div className="text-center p-3 rounded-xl bg-muted/50">
             <p className="text-xs text-muted-foreground">Wickets</p>
             <p className="text-xl font-bold text-green-400">{wickets}</p>
           </div>
-          <div className="text-center p-3 rounded-xl bg-gray-800/50">
+          <div className="text-center p-3 rounded-xl bg-muted/50">
             <p className="text-xs text-muted-foreground">SR</p>
             <p className="text-xl font-bold text-primary">{sr.toFixed(1)}</p>
           </div>
@@ -205,7 +205,7 @@ export default function PlayerDetailPage() {
                 <Badge className={
                   formData.trend === "improving" ? "bg-green-500/10 text-green-400" :
                   formData.trend === "declining" ? "bg-red-500/10 text-red-400" :
-                  "bg-gray-500/10 text-gray-400"
+                  "bg-muted text-muted-foreground"
                 }>
                   {formData.trend}
                 </Badge>

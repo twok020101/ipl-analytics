@@ -39,7 +39,7 @@ function StatBox({ label, value, sub, color }: {
   color?: string;
 }) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-3 text-center">
+    <div className="bg-muted/50 rounded-lg p-3 text-center">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("text-2xl font-bold mt-0.5", color)}>{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
@@ -132,7 +132,7 @@ export default function MyTeamPage() {
           <CardContent className="space-y-2">
             {data.upcoming_matches.length > 0 ? (
               data.upcoming_matches.map((m) => (
-                <div key={m.match_id} className="flex items-center justify-between p-2.5 bg-gray-800/30 rounded-lg">
+                <div key={m.match_id} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg">
                   <div>
                     <p className="text-sm font-medium">
                       vs <span className={getTeamTextColor(m.opponent)}>{m.opponent}</span>
@@ -159,7 +159,7 @@ export default function MyTeamPage() {
           <CardContent className="space-y-2">
             {data.recent_results.length > 0 ? (
               data.recent_results.map((m) => (
-                <div key={m.match_id} className="flex items-center justify-between p-2.5 bg-gray-800/30 rounded-lg">
+                <div key={m.match_id} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg">
                   <div>
                     <p className="text-sm font-medium">
                       vs <span className={getTeamTextColor(m.opponent)}>{m.opponent}</span>
@@ -256,7 +256,7 @@ export default function MyTeamPage() {
               <Link
                 key={p.id}
                 href={`/players/${p.id}`}
-                className="flex items-center gap-2 p-2.5 bg-gray-800/30 rounded-lg hover:bg-gray-800/60 transition-colors"
+                className="flex items-center gap-2 p-2.5 bg-muted/30 rounded-lg hover:bg-muted/60 transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">

@@ -6,25 +6,27 @@ import {
   Cell,
   ResponsiveContainer,
   Tooltip,
-  Legend,
 } from "recharts";
 import type { RunDistributionZone } from "@/lib/types";
+import { useChartColors } from "@/hooks/useChartColors";
 
 interface WagonWheelProps {
   distribution: RunDistributionZone[];
   playerName?: string;
 }
 
+// Keys are runs per ball (5 absent — exceedingly rare in cricket)
 const ZONE_COLORS: Record<number, string> = {
-  0: "#6b7280", // dots - gray
-  1: "#3b82f6", // singles - blue
-  2: "#10b981", // doubles - green
-  3: "#8b5cf6", // triples - purple
-  4: "#f59e0b", // fours - amber
-  6: "#ef4444", // sixes - red
+  0: "#6b7280", // dots
+  1: "#3b82f6", // singles
+  2: "#10b981", // doubles
+  3: "#8b5cf6", // triples
+  4: "#f59e0b", // fours
+  6: "#ef4444", // sixes
 };
 
 export function WagonWheel({ distribution, playerName }: WagonWheelProps) {
+  const c = useChartColors();
   const data = distribution
     .filter((d) => d.value > 0)
     .map((d) => ({
@@ -49,7 +51,7 @@ export function WagonWheel({ distribution, playerName }: WagonWheelProps) {
             animationBegin={0}
             animationDuration={1000}
             label={({ name, pct }) => `${name} ${pct}%`}
-            labelLine={{ stroke: "#6b7280" }}
+            labelLine={{ stroke: c.tick }}
           >
             {data.map((entry) => (
               <Cell
@@ -61,9 +63,10 @@ export function WagonWheel({ distribution, playerName }: WagonWheelProps) {
           </Pie>
           <Tooltip
             contentStyle={{
-              backgroundColor: "#1f2937",
-              border: "1px solid #374151",
+              backgroundColor: c.tooltipBg,
+              border: `1px solid ${c.tooltipBorder}`,
               borderRadius: "8px",
+              color: c.tooltipText,
             }}
             formatter={(value: number, name: string) => [
               `${value} balls`,

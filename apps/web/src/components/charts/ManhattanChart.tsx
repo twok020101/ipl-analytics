@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { useChartColors } from "@/hooks/useChartColors";
 
 interface ManhattanChartProps {
   data: { over: number; runs: number; boundaries?: number }[];
@@ -17,28 +18,30 @@ interface ManhattanChartProps {
 }
 
 export function ManhattanChart({ data, color = "#3b82f6" }: ManhattanChartProps) {
+  const c = useChartColors();
+
   return (
     <div className="w-full h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+          <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
           <XAxis
             dataKey="over"
-            tick={{ fill: "#9ca3af", fontSize: 11 }}
-            axisLine={{ stroke: "#374151" }}
-            label={{ value: "Over", position: "insideBottom", offset: -2, fill: "#6b7280" }}
+            tick={{ fill: c.tick, fontSize: 11 }}
+            axisLine={{ stroke: c.axis }}
+            label={{ value: "Over", position: "insideBottom", offset: -2, fill: c.tick }}
           />
           <YAxis
-            tick={{ fill: "#9ca3af", fontSize: 11 }}
-            axisLine={{ stroke: "#374151" }}
-            label={{ value: "Runs", angle: -90, position: "insideLeft", fill: "#6b7280" }}
+            tick={{ fill: c.tick, fontSize: 11 }}
+            axisLine={{ stroke: c.axis }}
+            label={{ value: "Runs", angle: -90, position: "insideLeft", fill: c.tick }}
           />
           <RechartsTooltip
             contentStyle={{
-              backgroundColor: "#1f2937",
-              border: "1px solid #374151",
+              backgroundColor: c.tooltipBg,
+              border: `1px solid ${c.tooltipBorder}`,
               borderRadius: "8px",
-              color: "#f9fafb",
+              color: c.tooltipText,
             }}
             formatter={(value: number) => [`${value} runs`, "Runs"]}
           />
@@ -46,7 +49,7 @@ export function ManhattanChart({ data, color = "#3b82f6" }: ManhattanChartProps)
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={entry.runs >= 12 ? "#f59e0b" : entry.runs >= 8 ? color : "#6b7280"}
+                fill={entry.runs >= 12 ? "#f59e0b" : entry.runs >= 8 ? color : c.axis}
               />
             ))}
           </Bar>

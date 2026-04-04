@@ -1,0 +1,11 @@
+export function StumplineIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <rect x="6" y="10" width="4" height="18" rx="2" fill="currentColor" />
+      <rect x="14" y="10" width="4" height="18" rx="2" fill="currentColor" />
+      <rect x="22" y="10" width="4" height="18" rx="2" fill="currentColor" />
+      <rect x="5" y="8" width="10" height="3" rx="1.5" fill="currentColor" opacity="0.8" />
+      <rect x="17" y="8" width="10" height="3" rx="1.5" fill="currentColor" opacity="0.8" />
+    </svg>
+  );
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ const roleBadgeColor = (role: string) => {
   if (r.includes("bowler")) return "bg-red-500/10 text-red-400 border-red-500/20";
   if (r.includes("all")) return "bg-purple-500/10 text-purple-400 border-purple-500/20";
   if (r.includes("keeper") || r.includes("wk")) return "bg-green-500/10 text-green-400 border-green-500/20";
-  return "bg-gray-500/10 text-gray-400 border-gray-500/20";
+  return "bg-muted text-muted-foreground border-border";
 };
 
 export function PlayerCard({
@@ -33,14 +34,15 @@ export function PlayerCard({
 }: PlayerCardProps) {
   return (
     <Link href={`/players/${id}`}>
-      <div
+      <motion.div
+        whileHover={{ y: -2, transition: { duration: 0.15 } }}
         className={cn(
-          "group rounded-xl border border-gray-800 bg-gray-900 p-5 transition-all duration-300 hover:border-gray-700 hover:shadow-lg hover:shadow-primary/5 hover:-translate-y-0.5 cursor-pointer",
+          "group rounded-xl border border-border bg-card p-5 transition-colors duration-300 hover:border-border-strong hover:shadow-lg hover:shadow-primary/5 cursor-pointer",
           className
         )}
       >
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-800 group-hover:bg-primary/10 transition-colors">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted group-hover:bg-primary/10 transition-colors">
             <User className="h-6 w-6 text-muted-foreground group-hover:text-primary transition-colors" />
           </div>
           <div className="min-w-0 flex-1">
@@ -53,12 +55,12 @@ export function PlayerCard({
           </div>
         </div>
         {keyStatLabel && keyStatValue !== undefined && (
-          <div className="mt-4 flex items-center gap-2 pt-3 border-t border-gray-800">
+          <div className="mt-4 flex items-center gap-2 pt-3 border-t border-border">
             <span className="text-sm text-muted-foreground">{keyStatLabel}:</span>
             <span className="text-sm font-semibold">{keyStatValue}</span>
           </div>
         )}
-      </div>
+      </motion.div>
     </Link>
   );
 }

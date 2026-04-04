@@ -37,7 +37,7 @@ export default function VenuesPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {(venues || []).map((venue) => (
             <Link key={venue.id} href={`/venues/${venue.id}`}>
-              <Card className="h-full transition-all duration-300 hover:border-gray-700 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group">
+              <Card className="h-full transition-all duration-300 hover:border-border-strong hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-3">
                     <div className="min-w-0 flex-1">
@@ -54,7 +54,7 @@ export default function VenuesPage() {
                     </div>
                   </div>
                   <div className="mt-4">
-                    <div className="p-2.5 rounded-lg bg-gray-800/50 text-center">
+                    <div className="p-2.5 rounded-lg bg-muted/50 text-center">
                       <p className="text-xs text-muted-foreground">Matches Played</p>
                       <p className="text-lg font-bold text-primary">{venue.matches_played || 0}</p>
                     </div>

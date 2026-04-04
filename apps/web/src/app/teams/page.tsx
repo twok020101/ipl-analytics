@@ -64,7 +64,7 @@ export default function TeamsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTeams.map((team) => (
             <Link key={team.id} href={`/teams/${team.slug}`}>
-              <Card className="h-full transition-all duration-300 hover:border-gray-700 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group">
+              <Card className="h-full transition-all duration-300 hover:border-border-strong hover:shadow-lg hover:-translate-y-0.5 cursor-pointer group">
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
@@ -85,11 +85,11 @@ export default function TeamsPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between p-2 rounded-lg bg-gray-800/50">
+                  <div className="mt-4 flex items-center justify-between p-2 rounded-lg bg-muted/50">
                     <span className="text-xs text-muted-foreground">
                       {team.is_active ? "Active" : "Defunct"}
                     </span>
-                    <Badge className={team.is_active ? "bg-green-500/10 text-green-400" : "bg-gray-500/10 text-gray-400"}>
+                    <Badge className={team.is_active ? "bg-green-500/10 text-green-400" : "bg-muted text-muted-foreground"}>
                       {team.short_name}
                     </Badge>
                   </div>

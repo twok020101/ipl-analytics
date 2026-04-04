@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { useChartColors } from "@/hooks/useChartColors";
 
 interface RunRateBarProps {
   data: { phase: string; [key: string]: string | number }[];
@@ -17,29 +18,31 @@ interface RunRateBarProps {
 }
 
 export function RunRateBar({ data, bars }: RunRateBarProps) {
+  const c = useChartColors();
+
   return (
     <div className="w-full h-[300px]">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+          <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
           <XAxis
             dataKey="phase"
-            tick={{ fill: "#9ca3af", fontSize: 12 }}
-            axisLine={{ stroke: "#374151" }}
+            tick={{ fill: c.tick, fontSize: 12 }}
+            axisLine={{ stroke: c.axis }}
           />
           <YAxis
-            tick={{ fill: "#9ca3af", fontSize: 12 }}
-            axisLine={{ stroke: "#374151" }}
+            tick={{ fill: c.tick, fontSize: 12 }}
+            axisLine={{ stroke: c.axis }}
           />
           <RechartsTooltip
             contentStyle={{
-              backgroundColor: "#1f2937",
-              border: "1px solid #374151",
+              backgroundColor: c.tooltipBg,
+              border: `1px solid ${c.tooltipBorder}`,
               borderRadius: "8px",
-              color: "#f9fafb",
+              color: c.tooltipText,
             }}
           />
-          <Legend wrapperStyle={{ color: "#9ca3af" }} />
+          <Legend wrapperStyle={{ color: c.tick }} />
           {bars.map((bar) => (
             <Bar
               key={bar.key}
