@@ -1,8 +1,8 @@
-# IPL Analytics Pro — Product Documentation
+# Stumpline — Product Documentation
 
 ## Overview
 
-IPL Analytics Pro is a B2B cricket analytics SaaS platform designed for IPL team management and analysts. It provides data-driven match strategy, win prediction, team selection, and live game planning powered by machine learning and AI.
+Stumpline is a B2B cricket analytics SaaS platform designed for IPL team management and analysts. It provides data-driven match strategy, win prediction, team selection, and live game planning powered by machine learning and AI.
 
 ## Tech Stack
 

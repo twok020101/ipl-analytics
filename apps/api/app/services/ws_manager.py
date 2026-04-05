@@ -169,14 +169,16 @@ class LiveScoreManager:
         while True:
             try:
                 print(f"WS poll tick — {self.connection_count} client(s), fetching scores...")
-                if self._connections:
-                    # Reuses the same payload builder as GET /live/scores
-                    payload = await build_scores_payload()
-                    fingerprint = self._score_fingerprint(payload)
+                # Always fetch + persist snapshots for post-match analysis,
+                # even when no WebSocket clients are connected.
+                payload = await build_scores_payload()
+                fingerprint = self._score_fingerprint(payload)
 
-                    if fingerprint != self._last_fingerprint:
-                        # Score changed — push immediately
-                        self._last_fingerprint = fingerprint
+                if fingerprint != self._last_fingerprint:
+                    self._last_fingerprint = fingerprint
+
+                    # Only broadcast when clients are connected
+                    if self._connections:
                         payload["type"] = "live_update"
                         payload["clients"] = self.connection_count
                         await self.broadcast(payload)
@@ -184,9 +186,9 @@ class LiveScoreManager:
                             f"Score change detected — broadcast to {self.connection_count} clients"
                         )
                     else:
-                        logger.debug("No score change, skipping broadcast")
+                        print("Score change detected — persisted (no clients to broadcast)")
                 else:
-                    print(f"WS poll tick (manager id={id(self)}) — no clients connected, skipping")
+                    logger.debug("No score change, skipping broadcast")
 
                 await asyncio.sleep(POLL_INTERVAL)
 

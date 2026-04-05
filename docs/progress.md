@@ -1,4 +1,4 @@
-# IPL Analytics Pro — Progress Log
+# Stumpline — Progress Log
 
 ## Session 1 (April 1, 2026)
 
