@@ -1,6 +1,7 @@
 """Gemini AI integration for generating cricket insights."""
 
 import json
+from datetime import date
 from google import genai
 from google.genai import types
 
@@ -198,10 +199,14 @@ def chat_analytics(question: str, context_data: Optional[dict] = None) -> str:
 using the provided data context. Be precise, use numbers when available, and provide
 actionable insights.
 
+IMPORTANT CONTEXT: Today's date is {date.today().strftime('%B %d, %Y')}. We are currently in the IPL {date.today().year} season.
+Always reference IPL {date.today().year - 1} and {date.today().year} statistics, form, and news as your primary source.
+Do NOT reference {date.today().year - 2} or earlier seasons as "recent" or "current" — those are historical.
+
 Question: {question}
 
 Data Context:
-{json.dumps(context_data, indent=2, default=str) if context_data else "No specific data provided - answer from general IPL knowledge"}
+{json.dumps(context_data, indent=2, default=str) if context_data else "No specific match data provided - answer using IPL 2025-2026 knowledge and statistics"}
 
 Provide a clear, data-driven answer in 100-200 words.
 """
