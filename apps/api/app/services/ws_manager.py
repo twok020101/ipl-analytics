@@ -176,12 +176,13 @@ class LiveScoreManager:
 
                 if fingerprint != self._last_fingerprint:
                     self._last_fingerprint = fingerprint
+                    # Always cache latest state so new clients get it immediately
+                    self._latest_state = {**payload, "type": "live_update"}
 
                     # Only broadcast when clients are connected
                     if self._connections:
-                        payload["type"] = "live_update"
-                        payload["clients"] = self.connection_count
-                        await self.broadcast(payload)
+                        self._latest_state["clients"] = self.connection_count
+                        await self.broadcast(self._latest_state)
                         print(
                             f"Score change detected — broadcast to {self.connection_count} clients"
                         )
