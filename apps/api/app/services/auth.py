@@ -1,12 +1,10 @@
 """JWT authentication service."""
 import jwt
 from datetime import datetime, timedelta, timezone
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.orm import Session
 from app.models.models import User, Organization, UserRole
 from app.config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 SECRET_KEY = settings.JWT_SECRET or "ipl-analytics-secret-change-in-production"
 ALGORITHM = "HS256"
@@ -14,11 +12,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def create_access_token(user_id: int, email: str, org_id: int = None, role: str = "analyst") -> str:
